@@ -20,9 +20,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: 'Development server',
       },
       {
-        url: ENV.NODE_ENV === 'production' 
-          ? `${ENV.API_PREFIX}` 
-          : `https://your-app.railway.app${ENV.API_PREFIX}`,
+        url: `https://wdp.up.railway.app${ENV.API_PREFIX}`,
         description: 'Production server',
       },
     ],
@@ -97,11 +95,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
       },
     ],
   },
-  apis: [
-    ENV.NODE_ENV === 'production' 
-      ? './dist/modules/**/*.routes.js'
-      : './src/modules/**/*.routes.ts'
-  ],
+  apis: ['./src/modules/**/*.routes.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(swaggerOptions);
