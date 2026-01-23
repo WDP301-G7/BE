@@ -53,6 +53,22 @@ if (ENV.SWAGGER_ENABLED) {
 import authRoutes from './modules/auth/auth.routes';
 import usersRoutes from './modules/users/users.routes';
 
+// API root endpoint
+app.get(ENV.API_PREFIX, (_req, res) => {
+  res.json(
+    apiResponse.success({
+      name: 'E-commerce API',
+      version: '1.0.0',
+      endpoints: {
+        auth: `${ENV.API_PREFIX}/auth`,
+        users: `${ENV.API_PREFIX}/users`,
+        docs: '/api-docs',
+        health: '/health',
+      },
+    })
+  );
+});
+
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
 
