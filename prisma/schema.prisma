@@ -1,0 +1,388 @@
+// prisma/schema.prisma
+// =============================================
+// ERD HỆ THỐNG BÁN KÍNH ONLINE
+// =============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS
+// ============================================
+
+model User {
+  id        String     @id @default(uuid())
+  fullName  String     @map("full_name") @db.VarChar(150)
+  email     String     @unique @db.VarChar(150)
+  phone     String?    @unique @db.VarChar(20)
+  password  String     @db.VarChar(255)
+  avatarUrl String?    @map("avatar_url") @db.VarChar(255)
+  role      UserRole
+  status    UserStatus
+  storeId   String?    @map("store_id")
+  address   String?    @db.VarChar(255)
+  
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  
+  // Relations
+  store                Store?          @relation(fields: [storeId], references: [id])
+  ordersAsCustomer     Order[]         @relation("CustomerOrders")
+  ordersAsHandler      Order[]         @relation("HandlerOrders")
+  prescriptionsAsCustomer Prescription[] @relation("CustomerPrescriptions")
+  prescriptionsAsMeasurer Prescription[] @relation("MeasurerPrescriptions")
+  returnRequestsAsHandler ReturnRequest[]
+  
+  @@map("users")
+  @@index([storeId])
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  MANAGER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+// ============================================
+// STORES
+// ============================================
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(100)
+  address   String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  users     User[]
+  inventory Inventory[]
+  
+  @@map("stores")
+}
+
+// ============================================
+// CATEGORIES
+// ============================================
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  products Product[]
+  
+  @@map("categories")
+}
+
+// ============================================
+// PRODUCTS
+// ============================================
+
+model Product {
+  id            String      @id @default(uuid())
+  categoryId    String      @map("category_id")
+  name          String      @db.VarChar(150)
+  description   String?     @db.Text
+  type          ProductType
+  price         Decimal     @db.Decimal(10, 2)
+  isPreorder    Boolean     @default(false) @map("is_preorder")
+  leadTimeDays  Int?        @map("lead_time_days")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  
+  // Relations
+  category      Category       @relation(fields: [categoryId], references: [id])
+  images        ProductImage[]
+  inventory     Inventory[]
+  orderItems    OrderItem[]
+  
+  @@map("products")
+  @@index([categoryId])
+  @@index([type])
+}
+
+enum ProductType {
+  FRAME
+  LENS
+  SERVICE
+}
+
+// ============================================
+// PRODUCT IMAGES
+// ============================================
+
+model ProductImage {
+  id         String           @id @default(uuid())
+  productId  String           @map("product_id")
+  imageUrl   String           @map("image_url") @db.VarChar(255)
+  imageType  ProductImageType @map("image_type")
+  isPrimary  Boolean          @default(false) @map("is_primary")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  
+  // Relations
+  product Product @relation(fields: [productId], references: [id])
+  
+  @@map("product_images")
+  @@index([productId])
+}
+
+enum ProductImageType {
+  TWO_D   @map("2D")
+  THREE_D @map("3D")
+  DETAIL
+}
+
+// ============================================
+// INVENTORY
+// ============================================
+
+model Inventory {
+  id               String   @id @default(uuid())
+  productId        String   @map("product_id")
+  storeId          String   @map("store_id")
+  quantity         Int
+  reservedQuantity Int      @default(0) @map("reserved_quantity")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  product Product @relation(fields: [productId], references: [id])
+  store   Store   @relation(fields: [storeId], references: [id])
+  
+  @@map("inventory")
+  @@index([productId])
+  @@index([storeId])
+}
+
+// ============================================
+// ORDERS
+// ============================================
+
+model Order {
+  id                String         @id @default(uuid())
+  customerId        String         @map("customer_id")
+  orderType         OrderType      @map("order_type")
+  status            OrderStatus
+  paymentStatus     PaymentStatus  @map("payment_status")
+  depositAmount     Decimal?       @map("deposit_amount") @db.Decimal(10, 2)
+  totalAmount       Decimal        @map("total_amount") @db.Decimal(10, 2)
+  expectedReadyDate DateTime?      @map("expected_ready_date") @db.Date
+  handledBy         String?        @map("handled_by")
+  shippingName      String         @map("shipping_name") @db.VarChar(150)
+  shippingPhone     String         @map("shipping_phone") @db.VarChar(20)
+  shippingAddress   String         @map("shipping_address") @db.VarChar(255)
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  
+  // Relations
+  customer       User            @relation("CustomerOrders", fields: [customerId], references: [id])
+  handler        User?           @relation("HandlerOrders", fields: [handledBy], references: [id])
+  orderItems     OrderItem[]
+  prescription   Prescription?
+  payments       Payment[]
+  shipments      Shipment[]
+  returnRequests ReturnRequest[]
+  
+  @@map("orders")
+  @@index([customerId])
+  @@index([handledBy])
+  @@index([status])
+  @@index([orderType])
+}
+
+enum OrderType {
+  IN_STOCK
+  PRE_ORDER
+  PRESCRIPTION
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  WAITING_PRODUCT
+  PROCESSING
+  READY
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  DEPOSITED
+  PAID
+}
+
+// ============================================
+// ORDER ITEMS
+// ============================================
+
+model OrderItem {
+  id         String          @id @default(uuid())
+  orderId    String          @map("order_id")
+  productId  String          @map("product_id")
+  quantity   Int
+  unitPrice  Decimal         @map("unit_price") @db.Decimal(10, 2)
+  itemStatus OrderItemStatus @map("item_status")
+  note       String?         @db.Text
+  
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  
+  @@map("order_items")
+  @@index([orderId])
+  @@index([productId])
+}
+
+enum OrderItemStatus {
+  PENDING
+  PROCESSING
+  READY
+  DELIVERED
+}
+
+// ============================================
+// PRESCRIPTIONS
+// ============================================
+
+model Prescription {
+  id                    String   @id @default(uuid())
+  orderId               String   @unique @map("order_id")
+  customerId            String   @map("customer_id")
+  prescriptionImageUrl  String   @map("prescription_image_url") @db.VarChar(255)
+  notes                 String?  @db.Text
+  measuredBy            String?  @map("measured_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  order      Order @relation(fields: [orderId], references: [id])
+  customer   User  @relation("CustomerPrescriptions", fields: [customerId], references: [id])
+  measurer   User? @relation("MeasurerPrescriptions", fields: [measuredBy], references: [id])
+  
+  @@map("prescriptions")
+  @@index([customerId])
+  @@index([measuredBy])
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+model Payment {
+  id        String        @id @default(uuid())
+  orderId   String        @map("order_id")
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(10, 2)
+  status    PaymentStatusEnum
+  paidAt    DateTime?     @map("paid_at")
+  
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+  
+  @@map("payments")
+  @@index([orderId])
+  @@index([status])
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  VNPAY
+  MOMO
+}
+
+enum PaymentStatusEnum {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+// ============================================
+// SHIPMENTS
+// ============================================
+
+model Shipment {
+  id                String         @id @default(uuid())
+  orderId           String         @map("order_id")
+  providerName      String         @map("provider_name") @db.VarChar(100)
+  trackingNumber    String         @map("tracking_number") @db.VarChar(100)
+  status            ShipmentStatus
+  providerOrderCode String?        @map("provider_order_code") @db.VarChar(100)
+  shippingFee       Decimal        @map("shipping_fee") @db.Decimal(10, 2)
+  shippedAt         DateTime?      @map("shipped_at")
+  deliveredAt       DateTime?      @map("delivered_at")
+  
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+  
+  @@map("shipments")
+  @@index([orderId])
+  @@index([trackingNumber])
+}
+
+enum ShipmentStatus {
+  CREATED
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+// ============================================
+// RETURN REQUESTS
+// ============================================
+
+model ReturnRequest {
+  id               String        @id @default(uuid())
+  orderId          String        @map("order_id")
+  type             ReturnType
+  status           ReturnStatus
+  channel          ReturnChannel
+  warrantyExpiredAt DateTime?    @map("warranty_expired_at") @db.Date
+  handledBy        String?       @map("handled_by")
+  reason           String        @db.Text
+  createdAt        DateTime      @default(now()) @map("created_at")
+  
+  // Relations
+  order   Order @relation(fields: [orderId], references: [id])
+  handler User? @relation(fields: [handledBy], references: [id])
+  
+  @@map("return_requests")
+  @@index([orderId])
+  @@index([handledBy])
+  @@index([status])
+}
+
+enum ReturnType {
+  RETURN
+  EXCHANGE
+  WARRANTY
+}
+
+enum ReturnStatus {
+  OPEN
+  APPROVED
+  COMPLETED
+  REJECTED
+}
+
+enum ReturnChannel {
+  IN_STORE
+}
