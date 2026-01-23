@@ -20,7 +20,9 @@ const swaggerOptions: swaggerJsdoc.Options = {
         description: 'Development server',
       },
       {
-        url: `https://api.ecommerce.com${ENV.API_PREFIX}`,
+        url: ENV.NODE_ENV === 'production' 
+          ? `${ENV.API_PREFIX}` 
+          : `https://your-app.railway.app${ENV.API_PREFIX}`,
         description: 'Production server',
       },
     ],
