@@ -69,17 +69,34 @@ class UsersController {
 
   /**
    * @route   PUT /api/users/:id
-   * @desc    Update user
+   * @desc    Update user (supports multipart/form-data with avatar upload)
    * @access  Private
    */
   async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.params.id as string;
-      const data: UpdateUserInput = req.body;
+      const rawData: UpdateUserInput = req.body;
       const updaterId = req.user!.userId;
       const updaterRole = req.user!.role as Role;
+      const avatarFile = req.file; // File from multer middleware
 
-      const user = await usersService.updateUser(userId, data, updaterId, updaterRole);
+      // Clean up empty strings from multipart form-data (convert to undefined)
+      const data: UpdateUserInput = Object.fromEntries(
+        Object.entries(rawData).filter(([_, value]) => value !== '' && value !== null)
+      ) as UpdateUserInput;
+
+      // If user is updating themselves (not admin/manager updating others)
+      if (userId === updaterId) {
+        // Remove restricted fields that users cannot change themselves
+        delete (data as any).role;
+        delete (data as any).status;
+        // storeId can only be changed by admin/manager
+        if (updaterRole === 'CUSTOMER') {
+          delete (data as any).storeId;
+        }
+      }
+
+      const user = await usersService.updateUser(userId, data, updaterId, updaterRole, avatarFile);
 
       res.status(200).json(
         apiResponse.success(user, 'User updated successfully')
@@ -99,7 +116,7 @@ class UsersController {
       const userId = req.params.id as string;
       const deleterId = req.user!.userId;
       const deleterRole = req.user!.role as Role;
-
+ 
       await usersService.deleteUser(userId, deleterId, deleterRole);
 
       res.status(200).json(

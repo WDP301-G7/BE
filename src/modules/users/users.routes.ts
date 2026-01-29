@@ -4,10 +4,10 @@ import { usersController } from './users.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { roleMiddleware } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
+import { uploadAvatar } from '../../middlewares/upload.middleware';
 import { ROLES } from '../../constants/roles';
 import {
   createUserSchema,
-  updateUserSchema,
   getUserSchema,
   getUsersQuerySchema,
 } from '../../validations/zod/users.schema';
@@ -182,7 +182,7 @@ router.get(
  * @swagger
  * /users/{id}:
  *   put:
- *     summary: Update user
+ *     summary: Update user profile (supports multipart/form-data with avatar upload)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -191,10 +191,32 @@ router.get(
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
  *     requestBody:
  *       required: true
  *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *                 description: Avatar image file (max 2MB, JPEG/PNG/WebP)
+ *               role:
+ *                 type: string
+ *                 enum: [CUSTOMER, STAFF, MANAGER, ADMIN]
+ *               status:
+ *                 type: string
+ *                 enum: [ACTIVE, INACTIVE, BANNED]
+ *               storeId:
+ *                 type: string
  *         application/json:
  *           schema:
  *             type: object
@@ -214,12 +236,12 @@ router.get(
  *                 type: string
  *                 enum: [ACTIVE, INACTIVE, BANNED]
  *               storeId:
- *                 type: integer
+ *                 type: string
  *     responses:
  *       200:
  *         description: User updated successfully
  *       400:
- *         description: Validation error
+ *         description: Validation error or invalid file
  *       401:
  *         description: Unauthorized
  *       403:
@@ -230,7 +252,7 @@ router.get(
 router.put(
   '/:id',
   validate(getUserSchema),
-  validate(updateUserSchema),
+  uploadAvatar, // Multer middleware to handle avatar upload (optional)
   usersController.updateUser.bind(usersController)
 );
 

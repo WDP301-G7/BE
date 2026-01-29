@@ -5,6 +5,7 @@ import { authRepository, CreateUserData, UpdateUserData } from '../auth/auth.rep
 import { passwordService } from '../../utils/password';
 import { NotFoundError, ForbiddenError, ConflictError, BadRequestError } from '../../utils/errorHandler';
 import { canManageRole, Role } from '../../constants/roles';
+import { uploadToSupabase, deleteFromSupabase, extractPathFromUrl, validateImageFile } from '../../utils/upload';
 
 class UsersService {
   /**
@@ -82,7 +83,8 @@ class UsersService {
     id: string,
     data: UpdateUserData & { role?: string; status?: string },
     updaterId: string,
-    updaterRole: Role
+    updaterRole: Role,
+    avatarFile?: Express.Multer.File
   ): Promise<Omit<User, 'password'>> {
     // Get user
     const user = await usersRepository.findById(id);
@@ -114,8 +116,33 @@ class UsersService {
       }
     }
 
-    // Update user
-    const updatedUser = await usersRepository.update(id, data as any);
+    // Handle avatar upload if provided
+    let avatarUrl = data.avatarUrl;
+    if (avatarFile) {
+      // Validate image file
+      validateImageFile(avatarFile, 2); // 2MB max for avatars
+
+      // Delete old avatar if exists
+      if (user.avatarUrl) {
+        const oldPath = extractPathFromUrl(user.avatarUrl);
+        if (oldPath) {
+          try {
+            await deleteFromSupabase(oldPath);
+          } catch (error) {
+            console.error('Failed to delete old avatar:', error);
+            // Continue even if deletion fails
+          }
+        }
+      }
+
+      // Upload new avatar
+      const uploadResult = await uploadToSupabase(avatarFile, 'avatars');
+      avatarUrl = uploadResult.url;
+    }
+
+    // Update user with avatar URL if uploaded
+    const updateData = avatarFile ? { ...data, avatarUrl } : data;
+    const updatedUser = await usersRepository.update(id, updateData as any);
 
     // Remove password from response
     const { password: _, ...userWithoutPassword } = updatedUser;

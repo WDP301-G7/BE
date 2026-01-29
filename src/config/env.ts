@@ -28,6 +28,10 @@ const envSchema = z.object({
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
+  SUPABASE_URL: z.string().min(1, 'SUPABASE_URL is required'),
+  SUPABASE_KEY: z.string().min(1, 'SUPABASE_KEY is required'),
+  SUPABASE_BUCKET: z.string().default('uploads'),
+
   CORS_ORIGIN: z.string().default('*'),
   SWAGGER_ENABLED: z
     .string()
