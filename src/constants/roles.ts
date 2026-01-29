@@ -3,6 +3,7 @@
 export const ROLES = {
   ADMIN: 'ADMIN',
   MANAGER: 'MANAGER',
+  OPERATION: 'OPERATION',
   STAFF: 'STAFF',
   CUSTOMER: 'CUSTOMER',
 } as const;
@@ -10,8 +11,9 @@ export const ROLES = {
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 export const ROLE_HIERARCHY = {
-  [ROLES.ADMIN]: 4,
-  [ROLES.MANAGER]: 3,
+  [ROLES.ADMIN]: 5,
+  [ROLES.MANAGER]: 4,
+  [ROLES.OPERATION]: 3,
   [ROLES.STAFF]: 2,
   [ROLES.CUSTOMER]: 1,
 } as const;
@@ -41,8 +43,6 @@ export const ROLE_PERMISSIONS = {
     'prescriptions:write',
     'payments:read',
     'payments:manage',
-    'shipments:read',
-    'shipments:manage',
     'returns:read',
     'returns:manage',
     'promotions:read',
@@ -67,12 +67,23 @@ export const ROLE_PERMISSIONS = {
     'prescriptions:read',
     'prescriptions:write',
     'payments:read',
-    'shipments:read',
-    'shipments:manage',
     'returns:read',
     'returns:manage',
     'promotions:read',
     'reports:read',
+  ],
+  [ROLES.OPERATION]: [
+    // Order processing & operations
+    'products:read',
+    'orders:read',
+    'orders:write',
+    'orders:manage',
+    'inventory:read',
+    'prescriptions:read',
+    'prescriptions:write',
+    'payments:read',
+    'returns:read',
+    'returns:write',
   ],
   [ROLES.STAFF]: [
     // Store operations
@@ -84,7 +95,6 @@ export const ROLE_PERMISSIONS = {
     'prescriptions:read',
     'prescriptions:write',
     'payments:read',
-    'shipments:read',
     'returns:read',
     'returns:write',
   ],

@@ -6,12 +6,12 @@ const swaggerOptions: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'E-commerce API Documentation',
+      title: 'Eyes Store API Documentation',
       version: '1.0.0',
       description: 'Backend API for E-commerce system - Node.js + Express + TypeScript + Prisma + MySQL',
       contact: {
         name: 'API Support',
-        email: 'support@ecommerce.com',
+        email: 'support@eyesstore.com',
       },
     },
     servers: [

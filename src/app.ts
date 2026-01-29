@@ -57,11 +57,19 @@ if (ENV.SWAGGER_ENABLED) {
 // API Routes
 import authRoutes from './modules/auth/auth.routes';
 import usersRoutes from './modules/users/users.routes';
-
-
+import productsRoutes from './modules/products/products.routes';
+import productImagesRoutes from './modules/products/product-images.routes';
+import categoriesRoutes from './modules/categories/categories.routes';
+import storesRoutes from './modules/stores/stores.routes';
+import inventoryRoutes from './modules/inventory/inventory.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
+app.use(`${ENV.API_PREFIX}/categories`, categoriesRoutes);
+app.use(`${ENV.API_PREFIX}/stores`, storesRoutes);
+app.use(`${ENV.API_PREFIX}/products`, productsRoutes);
+app.use(`${ENV.API_PREFIX}/products`, productImagesRoutes);
+app.use(`${ENV.API_PREFIX}/inventory`, inventoryRoutes);
 
 // 404 handler
 app.use((req, res) => {
