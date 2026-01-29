@@ -189,7 +189,9 @@ model Order {
   paymentStatus     PaymentStatus  @map("payment_status")
   depositAmount     Decimal?       @map("deposit_amount") @db.Decimal(10, 2)
   totalAmount       Decimal        @map("total_amount") @db.Decimal(10, 2)
-  expectedReadyDate DateTime?      @map("expected_ready_date") @db.Date
+  expectedReadyDate DateTime?      @map("expected_ready_date")
+  appointmentDate   DateTime?      @map("appointment_date")
+  appointmentNote   String?        @map("appointment_note") @db.Text
   handledBy         String?        @map("handled_by")
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
@@ -218,6 +220,7 @@ enum OrderType {
 enum OrderStatus {
   NEW
   CONFIRMED
+  WAITING_CUSTOMER
   WAITING_PRODUCT
   PROCESSING
   READY
