@@ -62,6 +62,7 @@ import productImagesRoutes from './modules/products/product-images.routes';
 import categoriesRoutes from './modules/categories/categories.routes';
 import storesRoutes from './modules/stores/stores.routes';
 import inventoryRoutes from './modules/inventory/inventory.routes';
+import ordersRoutes from './modules/orders/orders.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
@@ -70,6 +71,7 @@ app.use(`${ENV.API_PREFIX}/stores`, storesRoutes);
 app.use(`${ENV.API_PREFIX}/products`, productsRoutes);
 app.use(`${ENV.API_PREFIX}/products`, productImagesRoutes);
 app.use(`${ENV.API_PREFIX}/inventory`, inventoryRoutes);
+app.use(`${ENV.API_PREFIX}/orders`, ordersRoutes);
 
 // 404 handler
 app.use((req, res) => {
