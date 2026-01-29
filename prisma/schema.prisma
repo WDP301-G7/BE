@@ -48,6 +48,7 @@ model User {
 enum UserRole {
   CUSTOMER
   STAFF
+  OPERATION
   MANAGER
   ADMIN
 }
@@ -67,6 +68,7 @@ model Store {
   name      String   @db.VarChar(100)
   address   String   @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   
   // Relations
   users     User[]
@@ -105,6 +107,9 @@ model Product {
   price         Decimal     @db.Decimal(10, 2)
   isPreorder    Boolean     @default(false) @map("is_preorder")
   leadTimeDays  Int?        @map("lead_time_days")
+  sku           String?     @db.VarChar(50)
+  brand         String?     @db.VarChar(100)
+  deletedAt     DateTime?   @map("deleted_at")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
   
@@ -117,6 +122,7 @@ model Product {
   @@map("products")
   @@index([categoryId])
   @@index([type])
+  @@index([deletedAt])
 }
 
 enum ProductType {
@@ -185,9 +191,6 @@ model Order {
   totalAmount       Decimal        @map("total_amount") @db.Decimal(10, 2)
   expectedReadyDate DateTime?      @map("expected_ready_date") @db.Date
   handledBy         String?        @map("handled_by")
-  shippingName      String         @map("shipping_name") @db.VarChar(150)
-  shippingPhone     String         @map("shipping_phone") @db.VarChar(20)
-  shippingAddress   String         @map("shipping_address") @db.VarChar(255)
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
   
@@ -197,7 +200,6 @@ model Order {
   orderItems     OrderItem[]
   prescription   Prescription?
   payments       Payment[]
-  shipments      Shipment[]
   returnRequests ReturnRequest[]
   
   @@map("orders")
@@ -219,7 +221,6 @@ enum OrderStatus {
   WAITING_PRODUCT
   PROCESSING
   READY
-  SHIPPED
   COMPLETED
   CANCELLED
 }
@@ -312,36 +313,6 @@ enum PaymentMethod {
 enum PaymentStatusEnum {
   PENDING
   SUCCESS
-  FAILED
-}
-
-// ============================================
-// SHIPMENTS
-// ============================================
-
-model Shipment {
-  id                String         @id @default(uuid())
-  orderId           String         @map("order_id")
-  providerName      String         @map("provider_name") @db.VarChar(100)
-  trackingNumber    String         @map("tracking_number") @db.VarChar(100)
-  status            ShipmentStatus
-  providerOrderCode String?        @map("provider_order_code") @db.VarChar(100)
-  shippingFee       Decimal        @map("shipping_fee") @db.Decimal(10, 2)
-  shippedAt         DateTime?      @map("shipped_at")
-  deliveredAt       DateTime?      @map("delivered_at")
-  
-  // Relations
-  order Order @relation(fields: [orderId], references: [id])
-  
-  @@map("shipments")
-  @@index([orderId])
-  @@index([trackingNumber])
-}
-
-enum ShipmentStatus {
-  CREATED
-  IN_TRANSIT
-  DELIVERED
   FAILED
 }
 
