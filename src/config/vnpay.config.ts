@@ -10,6 +10,7 @@ export const vnpayConfig = {
     returnUrl: process.env.VNPAY_RETURN_URL,
     ipnUrl: process.env.VNPAY_IPN_URL,
     frontendUrl: process.env.FRONTEND_URL,
+    appDeeplink: process.env.APP_DEEPLINK,
     vnpayHost: process.env.VNPAY_HOST || 'https://sandbox.vnpayment.vn', // Default to sandbox if env is missing
     testMode: process.env.NODE_ENV !== 'production', // Auto-detect mode
 };

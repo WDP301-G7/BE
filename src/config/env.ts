@@ -37,6 +37,8 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === 'true')
     .default('true'),
+
+  APP_DEEPLINK: z.string().optional(),
 });
 
 const parseEnv = () => {
