@@ -76,7 +76,25 @@ class PaymentsController {
             const result = await paymentsService.handleVNPayReturn(params);
 
             const isSuccess = result.isValid && result.responseCode === '00';
-            const { vnp_TxnRef, vnp_ResponseCode } = params;
+            const { vnp_TxnRef, vnp_ResponseCode, vnp_Amount, vnp_TransactionNo } = params;
+
+            // Build dynamic deeplink if configured
+            let finalDeeplink = '';
+            if (vnpayConfig.appDeeplink) {
+                const amount = vnp_Amount ? parseInt(vnp_Amount) / 100 : 0;
+                const queryParams = new URLSearchParams({
+                    orderId: vnp_TxnRef,
+                    transactionId: vnp_TransactionNo || '',
+                    amount: amount.toString(),
+                    paymentMethod: 'vnpay',
+                    status: isSuccess ? 'success' : 'fail',
+                    responseCode: vnp_ResponseCode
+                }).toString();
+
+                // Ensure we handle cases where appDeeplink might already have query params
+                const separator = vnpayConfig.appDeeplink.includes('?') ? '&' : '?';
+                finalDeeplink = `${vnpayConfig.appDeeplink}${separator}${queryParams}`;
+            }
 
             res.setHeader('Content-Type', 'text/html');
             res.send(`
@@ -87,9 +105,26 @@ class PaymentsController {
                     <p>Mã đơn hàng: <b>${vnp_TxnRef}</b></p>
                     <p>Mã lỗi: ${vnp_ResponseCode}</p>
                     ${!isSuccess ? `<p>Lý do: ${result.message}</p>` : ''}
-                    <a href="${vnpayConfig.frontendUrl ?? ''}/orders/${vnp_TxnRef}" style="padding: 10px 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; display: inline-block;">
-                        Quay về đơn hàng
-                    </a>
+                    
+                    ${finalDeeplink
+                    ? `
+                        <a href="${finalDeeplink}" style="padding: 10px 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; display: inline-block;">
+                            Quay về ứng dụng
+                        </a>
+                        <script>
+                            // Auto redirect to app
+                            setTimeout(function() {
+                                window.location.href = "${finalDeeplink}";
+                            }, 1500);
+                        </script>
+                        `
+                    : `
+                        <a href="${vnpayConfig.frontendUrl ?? ''}/orders/${vnp_TxnRef}" style="padding: 10px 20px; background: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; display: inline-block;">
+                            Quay về đơn hàng
+                        </a>
+                        `
+                }
+                    
                     <br/><br/>
                     <a href="/api-docs" style="color: #666; font-size: 14px;">Swagger API</a>
                 </div>
