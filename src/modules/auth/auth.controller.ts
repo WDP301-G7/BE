@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from './auth.service';
 import { apiResponse } from '../../utils/apiResponse';
-import { RegisterInput, LoginInput, ChangePasswordInput } from '../../validations/zod/auth.schema';
+import { RegisterInput, LoginInput, ChangePasswordInput, GoogleLoginInput } from '../../validations/zod/auth.schema';
 
 class AuthController {
   /**
@@ -37,6 +37,25 @@ class AuthController {
 
       res.status(200).json(
         apiResponse.success(result, 'Login successful')
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @route   POST /api/auth/google
+   * @desc    Login with Google
+   * @access  Public
+   */
+  async googleLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { credential }: GoogleLoginInput = req.body;
+
+      const result = await authService.loginWithGoogle(credential);
+
+      res.status(200).json(
+        apiResponse.success(result, 'Google login successful')
       );
     } catch (error) {
       next(error);

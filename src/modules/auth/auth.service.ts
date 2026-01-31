@@ -1,5 +1,8 @@
 // src/modules/auth/auth.service.ts
 import { User } from '@prisma/client';
+import { OAuth2Client } from 'google-auth-library';
+import crypto from 'crypto';
+import { ENV } from '../../config/env';
 import { authRepository, CreateUserData } from './auth.repository';
 import { passwordService } from '../../utils/password';
 import { tokenService } from '../../utils/token';
@@ -99,6 +102,70 @@ class AuthService {
     });
 
     // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    return {
+      user: userWithoutPassword,
+      tokens,
+    };
+    return {
+      user: userWithoutPassword,
+      tokens,
+    };
+  }
+
+  /**
+   * Verify Google Token
+   */
+  async verifyGoogleToken(token: string) {
+    const client = new OAuth2Client(ENV.GOOGLE_CLIENT_ID);
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: ENV.GOOGLE_CLIENT_ID,
+      });
+      return ticket.getPayload();
+    } catch (error) {
+      throw new UnauthorizedError('Invalid Google token');
+    }
+  }
+
+  /**
+   * Login with Google
+   */
+  async loginWithGoogle(credential: string): Promise<AuthResponse> {
+    const payload = await this.verifyGoogleToken(credential);
+
+    if (!payload || !payload.email) {
+      throw new UnauthorizedError('Invalid Google token payload');
+    }
+
+    let user = await authRepository.findByEmail(payload.email);
+
+    if (!user) {
+      // Create new user
+      const randomPassword = crypto.randomBytes(16).toString('hex');
+      const hashedPassword = await passwordService.hash(randomPassword);
+
+      user = await authRepository.create({
+        email: payload.email,
+        fullName: payload.name || payload.email.split('@')[0],
+        password: hashedPassword,
+        role: 'CUSTOMER',
+        status: 'ACTIVE',
+      });
+    } else {
+      if (user.status !== 'ACTIVE') {
+        throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}`);
+      }
+    }
+
+    const tokens = tokenService.generateTokenPair({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
     const { password: _, ...userWithoutPassword } = user;
 
     return {
