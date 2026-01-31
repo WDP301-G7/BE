@@ -8,6 +8,7 @@ import {
   loginSchema,
   refreshTokenSchema,
   changePasswordSchema,
+  googleLoginSchema,
 } from '../../validations/zod/auth.schema';
 
 const router = Router();
@@ -94,6 +95,33 @@ router.post('/register', validate(registerSchema), authController.register.bind(
  *         description: Invalid credentials
  */
 router.post('/login', validate(loginSchema), authController.login.bind(authController));
+
+/**
+ * @swagger
+ * /auth/google:
+ *   post:
+ *     summary: Login with Google
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - credential
+ *             properties:
+ *               credential:
+ *                 type: string
+ *                 description: Google ID Token (JWT)
+ *                 example: eyJhbGciOiJSUzI1NiIsImtpZCI6IjFj...
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Invalid Google token
+ */
+router.post('/google', validate(googleLoginSchema), authController.googleLogin.bind(authController));
 
 /**
  * @swagger
