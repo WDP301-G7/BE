@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { productsService } from './products.service';
 import { apiResponse } from '../../utils/apiResponse';
-import { CreateProductInput, UpdateProductInput, GetProductsQuery } from '../../validations/zod/products.schema';
+import { CreateProductInput, UpdateProductInput, GetProductsQuery, createProductSchema } from '../../validations/zod/products.schema';
 
 class ProductsController {
   /**
@@ -41,14 +41,118 @@ class ProductsController {
 
   /**
    * @route   POST /api/products
-   * @desc    Create new product
+   * @desc    Create new product with images
    * @access  Private (Admin only)
    */
   async createProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data: CreateProductInput = req.body;
+      // Parse product data from multipart form fields
+      const {
+        categoryId,
+        name,
+        description,
+        type,
+        price,
+        isPreorder,
+        leadTimeDays,
+        sku,
+        brand,
+        primaryIndex: primaryIndexString,
+        imageTypes: imageTypesString,
+      } = req.body;
 
-      const product = await productsService.createProduct(data);
+      // Validate required fields
+      if (!categoryId || !name || !type || !price) {
+        res.status(400).json(apiResponse.error('Missing required fields: categoryId, name, type, price', 400));
+        return;
+      }
+
+      // Parse and validate price
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice)) {
+        res.status(400).json(apiResponse.error('Price must be a valid number', 400));
+        return;
+      }
+
+      // Parse isPreorder (handle string "true"/"false")
+      const parsedIsPreorder = isPreorder === 'true' || isPreorder === true;
+
+      // Parse leadTimeDays if provided
+      let parsedLeadTimeDays: number | undefined;
+      if (leadTimeDays) {
+        parsedLeadTimeDays = parseInt(leadTimeDays, 10);
+        if (isNaN(parsedLeadTimeDays)) {
+          res.status(400).json(apiResponse.error('Lead time days must be a valid number', 400));
+          return;
+        }
+      }
+
+      // Build product data object
+      const data: CreateProductInput = {
+        categoryId,
+        name,
+        description: description || undefined,
+        type,
+        price: parsedPrice,
+        isPreorder: parsedIsPreorder,
+        leadTimeDays: parsedLeadTimeDays,
+        sku: sku || undefined,
+        brand: brand || undefined,
+      };
+
+      // Validate data against schema
+      const validationResult = createProductSchema.safeParse({ body: data });
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map((err) => ({
+          path: err.path.join('.'),
+          message: err.message,
+        }));
+        res.status(400).json(apiResponse.validationError(errors));
+        return;
+      }
+
+      // Get uploaded files
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        res.status(400).json(apiResponse.error('Images are required', 400));
+        return;
+      }
+
+      // Get and validate primary index
+      if (primaryIndexString === undefined || primaryIndexString === null || primaryIndexString === '') {
+        res.status(400).json(apiResponse.error('Primary index is required', 400));
+        return;
+      }
+
+      const primaryIndex = parseInt(primaryIndexString, 10);
+      if (isNaN(primaryIndex)) {
+        res.status(400).json(apiResponse.error('Primary index must be a number', 400));
+        return;
+      }
+
+      // Get and parse image types
+      let imageTypes: string[];
+      if (typeof imageTypesString === 'string') {
+        // Try parsing as JSON array first
+        if (imageTypesString.trim().startsWith('[')) {
+          try {
+            imageTypes = JSON.parse(imageTypesString);
+          } catch (error) {
+            res.status(400).json(apiResponse.error('Invalid JSON in imageTypes field', 400));
+            return;
+          }
+        } else {
+          // Parse as comma-separated string
+          imageTypes = imageTypesString.split(',').map(t => t.trim());
+        }
+      } else if (Array.isArray(imageTypesString)) {
+        imageTypes = imageTypesString;
+      } else {
+        res.status(400).json(apiResponse.error('Image types are required', 400));
+        return;
+      }
+
+      const product = await productsService.createProduct(data, files, primaryIndex, imageTypes);
 
       res.status(201).json(apiResponse.success(product, 'Product created successfully', 201));
     } catch (error) {
