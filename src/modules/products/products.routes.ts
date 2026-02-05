@@ -4,9 +4,9 @@ import { productsController } from './products.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { roleMiddleware } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
+import { uploadProductImages } from '../../middlewares/upload.middleware';
 import { ROLES } from '../../constants/roles';
 import {
-  createProductSchema,
   updateProductSchema,
   getProductSchema,
   getProductsQuerySchema,
@@ -182,14 +182,14 @@ router.get('/', validate(getProductsQuerySchema), productsController.getProducts
  * @swagger
  * /products:
  *   post:
- *     summary: Create new product
+ *     summary: Create new product with 5 images
  *     tags: [Products]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -197,33 +197,75 @@ router.get('/', validate(getProductsQuerySchema), productsController.getProducts
  *               - name
  *               - type
  *               - price
+ *               - images
+ *               - primaryIndex
+ *               - imageTypes
  *             properties:
  *               categoryId:
  *                 type: string
  *                 format: uuid
+ *                 description: Category ID
  *               name:
  *                 type: string
+ *                 description: Product name
  *               description:
  *                 type: string
+ *                 description: Product description (optional)
  *               type:
  *                 type: string
  *                 enum: [FRAME, LENS, SERVICE]
+ *                 description: Product type
  *               price:
  *                 type: number
+ *                 description: Product price
  *               isPreorder:
  *                 type: boolean
  *                 default: false
+ *                 description: Is this a preorder product
  *               leadTimeDays:
  *                 type: integer
+ *                 description: Lead time in days (required if isPreorder is true)
  *               sku:
  *                 type: string
+ *                 description: Product SKU (optional)
  *               brand:
  *                 type: string
+ *                 description: Product brand (optional)
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Exactly 5 product images (max 5MB each, JPEG/PNG/WebP)
+ *                 minItems: 5
+ *                 maxItems: 5
+ *               primaryIndex:
+ *                 type: integer
+ *                 description: Index of the primary image (0-4)
+ *                 minimum: 0
+ *                 maximum: 4
+ *                 example: 2
+ *               imageTypes:
+ *                 type: string
+ *                 description: JSON array of image types for each image
+ *                 example: '["2D","3D","DETAIL","2D","2D"]'
  *     responses:
  *       201:
  *         description: Product created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 statusCode:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Product'
  *       400:
- *         description: Validation error
+ *         description: Validation error (missing fields, invalid data, or not exactly 5 images)
  *       401:
  *         description: Unauthorized
  *       403:
@@ -235,7 +277,7 @@ router.post(
   '/',
   authMiddleware,
   roleMiddleware([ROLES.ADMIN]),
-  validate(createProductSchema),
+  uploadProductImages, // Multer middleware for exactly 5 images
   productsController.createProduct.bind(productsController)
 );
 
