@@ -13,6 +13,8 @@ import {
     orderIdSchema,
     updateOrderStatusSchema,
     cancelOrderSchema,
+    verifyOrderSchema,
+    completeOrderWithNotesSchema,
 } from '../../validations/zod/orders.schema';
 
 const router = Router();
@@ -370,7 +372,7 @@ router.post(
  * @swagger
  * /orders/{id}/complete:
  *   post:
- *     summary: Complete order
+ *     summary: Complete order (legacy endpoint)
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
@@ -394,6 +396,148 @@ router.post(
     roleMiddleware([ROLES.STAFF]),
     validate(orderIdSchema),
     ordersController.completeOrder.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/{id}/verify:
+ *   get:
+ *     summary: Verify order for pickup
+ *     description: Staff verifies customer identity and order details at pickup
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: phone
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Customer phone number for verification
+ *     responses:
+ *       200:
+ *         description: Order verification completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 verified:
+ *                   type: boolean
+ *                 customer:
+ *                   type: object
+ *                 isPaid:
+ *                   type: boolean
+ *                 order:
+ *                   type: object
+ *       404:
+ *         description: Order not found
+ */
+router.get(
+    '/:id/verify',
+    authMiddleware,
+    roleMiddleware([ROLES.STAFF, ROLES.OPERATION, ROLES.ADMIN]),
+    validate(verifyOrderSchema),
+    ordersController.verifyOrder.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/{id}/complete:
+ *   patch:
+ *     summary: Complete order with notes
+ *     description: Enhanced completion endpoint with staff notes
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               completionNote:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Optional completion notes
+ *     responses:
+ *       200:
+ *         description: Order completed successfully
+ *       400:
+ *         description: Invalid order status
+ *       404:
+ *         description: Order not found
+ */
+router.patch(
+    '/:id/complete',
+    authMiddleware,
+    roleMiddleware([ROLES.STAFF, ROLES.OPERATION, ROLES.ADMIN]),
+    validate(completeOrderWithNotesSchema),
+    ordersController.completeOrderWithNotes.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/{id}/prescription:
+ *   get:
+ *     summary: Get order prescription details
+ *     description: View prescription with eye measurements and images
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Prescription retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 orderId:
+ *                   type: string
+ *                 customer:
+ *                   type: object
+ *                 prescription:
+ *                   type: object
+ *                   properties:
+ *                     rightEye:
+ *                       type: object
+ *                     leftEye:
+ *                       type: object
+ *                     pupillaryDistance:
+ *                       type: number
+ *                 prescriptionRequestImages:
+ *                   type: array
+ *       403:
+ *         description: Forbidden - not order owner
+ *       404:
+ *         description: Order or prescription not found
+ */
+router.get(
+    '/:id/prescription',
+    authMiddleware,
+    validate(orderIdSchema),
+    ordersController.getOrderPrescription.bind(ordersController)
 );
 
 /**
@@ -436,6 +580,146 @@ router.put(
     roleMiddleware([ROLES.ADMIN]),
     validate(updateOrderStatusSchema),
     ordersController.forceUpdateStatus.bind(ordersController)
+);
+
+// ============================================
+// PRESCRIPTION FLOW - NEW ENDPOINTS
+// ============================================
+
+/**
+ * @swagger
+ * /orders/{id}/verify:
+ *   get:
+ *     summary: Verify order for pickup (Prescription Flow)
+ *     description: Staff verifies customer identity and order details at pickup
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: phone
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Customer phone number for verification
+ *     responses:
+ *       200:
+ *         description: Order verification completed
+ *       404:
+ *         description: Order not found
+ */
+router.get(
+    '/:id/verify',
+    authMiddleware,
+    roleMiddleware([ROLES.STAFF, ROLES.OPERATION, ROLES.ADMIN]),
+    validate(verifyOrderSchema),
+    ordersController.verifyOrder.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/{id}/complete-with-notes:
+ *   patch:
+ *     summary: Complete order with notes (Prescription Flow)
+ *     description: Enhanced completion endpoint with staff notes for prescription orders
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               completionNote:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Optional completion notes
+ *     responses:
+ *       200:
+ *         description: Order completed successfully
+ *       400:
+ *         description: Invalid order status
+ *       404:
+ *         description: Order not found
+ */
+router.patch(
+    '/:id/complete-with-notes',
+    authMiddleware,
+    roleMiddleware([ROLES.STAFF, ROLES.OPERATION, ROLES.ADMIN]),
+    validate(completeOrderWithNotesSchema),
+    ordersController.completeOrderWithNotes.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/{id}/prescription:
+ *   get:
+ *     summary: Get order prescription details (Prescription Flow)
+ *     description: View prescription with eye measurements and images
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Prescription retrieved successfully
+ *       403:
+ *         description: Forbidden - not order owner
+ *       404:
+ *         description: Order or prescription not found
+ */
+router.get(
+    '/:id/prescription',
+    authMiddleware,
+    validate(orderIdSchema),
+    ordersController.getOrderPrescription.bind(ordersController)
+);
+
+/**
+ * @swagger
+ * /orders/expire-unpaid:
+ *   post:
+ *     summary: Manually expire unpaid orders (Admin/Operation)
+ *     description: Find and expire all unpaid orders past their expiry date
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Orders expired successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 expiredCount:
+ *                   type: integer
+ */
+router.post(
+    '/expire-unpaid',
+    authMiddleware,
+    roleMiddleware([ROLES.ADMIN, ROLES.OPERATION]),
+    ordersController.expireUnpaidOrders.bind(ordersController)
 );
 
 export default router;

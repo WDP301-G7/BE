@@ -67,3 +67,12 @@ export const uploadProductImages = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit per file
   },
 }).array('images', 5);
+
+// Create multer upload instance for prescription request images (1-3 images)
+export const uploadPrescriptionImages = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+  },
+}).array('images', 3);

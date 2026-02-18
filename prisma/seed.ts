@@ -91,97 +91,133 @@ async function main() {
   console.log(`✅ Created ${stores.length} stores`);
 
   // ============================================
-  // 3. USERS (Admin, Manager, Staff)
+  // 3. USERS
   // ============================================
   console.log('👤 Creating users...');
 
   const hashedPassword = await bcrypt.hash('Admin@123', 10);
 
   const users = await Promise.all([
+    // Admin
     prisma.user.upsert({
       where: { email: 'admin@wdp.com' },
       update: {},
       create: {
+        id: '00000000-0000-0000-0000-000000000101',
         email: 'admin@wdp.com',
         password: hashedPassword,
         fullName: 'Administrator',
-        phone: '0901234567',
+        phone: '0901111111',
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
         address: 'TP. Hồ Chí Minh',
       },
     }),
+    // Manager
     prisma.user.upsert({
       where: { email: 'manager@wdp.com' },
       update: {},
       create: {
+        id: '00000000-0000-0000-0000-000000000102',
         email: 'manager@wdp.com',
         password: hashedPassword,
         fullName: 'Nguyễn Văn Manager',
-        phone: '0902345678',
+        phone: '0902222222',
         role: UserRole.MANAGER,
         status: UserStatus.ACTIVE,
         storeId: stores[0].id,
         address: 'Quận 1, TP. Hồ Chí Minh',
       },
     }),
+    // Operation (cần cho prescription flow)
+    prisma.user.upsert({
+      where: { email: 'operation@wdp.com' },
+      update: {},
+      create: {
+        id: '00000000-0000-0000-0000-000000000103',
+        email: 'operation@wdp.com',
+        password: hashedPassword,
+        fullName: 'Trần Thị Operation',
+        phone: '0903333333',
+        role: UserRole.OPERATION,
+        status: UserStatus.ACTIVE,
+        storeId: stores[0].id,
+        address: 'Quận 1, TP. Hồ Chí Minh',
+      },
+    }),
+    // Staff 1
     prisma.user.upsert({
       where: { email: 'staff1@wdp.com' },
       update: {},
       create: {
+        id: '00000000-0000-0000-0000-000000000104',
         email: 'staff1@wdp.com',
         password: hashedPassword,
-        fullName: 'Trần Thị Staff 1',
-        phone: '0903456789',
+        fullName: 'Lê Văn Staff',
+        phone: '0904444444',
         role: UserRole.STAFF,
         status: UserStatus.ACTIVE,
         storeId: stores[0].id,
         address: 'Quận 1, TP. Hồ Chí Minh',
       },
     }),
+    // Staff 2
     prisma.user.upsert({
       where: { email: 'staff2@wdp.com' },
       update: {},
       create: {
+        id: '00000000-0000-0000-0000-000000000105',
         email: 'staff2@wdp.com',
         password: hashedPassword,
-        fullName: 'Lê Văn Staff 2',
-        phone: '0904567890',
+        fullName: 'Phạm Thị Staff 2',
+        phone: '0905555555',
         role: UserRole.STAFF,
         status: UserStatus.ACTIVE,
         storeId: stores[1].id,
         address: 'Quận 7, TP. Hồ Chí Minh',
       },
     }),
+    // Customer 1 (dùng để test prescription flow - phone: 0906666666)
     prisma.user.upsert({
       where: { email: 'customer@example.com' },
       update: {},
       create: {
+        id: '00000000-0000-0000-0000-000000000106',
         email: 'customer@example.com',
         password: hashedPassword,
-        fullName: 'Khách hàng Test',
-        phone: '0905678901',
+        fullName: 'Nguyễn Văn Khách',
+        phone: '0906666666',
         role: UserRole.CUSTOMER,
         status: UserStatus.ACTIVE,
-        address: 'TP. Hồ Chí Minh',
+        address: 'Quận 3, TP. Hồ Chí Minh',
+      },
+    }),
+    // Customer 2
+    prisma.user.upsert({
+      where: { email: 'customer2@example.com' },
+      update: {},
+      create: {
+        id: '00000000-0000-0000-0000-000000000107',
+        email: 'customer2@example.com',
+        password: hashedPassword,
+        fullName: 'Trần Thị Khách Hai',
+        phone: '0907777777',
+        role: UserRole.CUSTOMER,
+        status: UserStatus.ACTIVE,
+        address: 'Quận 5, TP. Hồ Chí Minh',
       },
     }),
   ]);
 
   console.log(`✅ Created ${users.length} users`);
-  console.log('📧 Default credentials:');
-  console.log('   - admin@wdp.com / Admin@123');
-  console.log('   - manager@wdp.com / Admin@123');
-  console.log('   - staff1@wdp.com / Admin@123');
-  console.log('   - customer@example.com / Admin@123');
 
   // ============================================
-  // 4. SAMPLE PRODUCTS
+  // 4. PRODUCTS
   // ============================================
-  console.log('📦 Creating sample products...');
+  console.log('📦 Creating products...');
 
   const products = await Promise.all([
-    // Gọng kính
+    // Gọng kính 1
     prisma.product.upsert({
       where: { id: '00000000-0000-0000-0000-000000000021' },
       update: {},
@@ -197,6 +233,7 @@ async function main() {
         isPreorder: false,
       },
     }),
+    // Gọng kính 2
     prisma.product.upsert({
       where: { id: '00000000-0000-0000-0000-000000000022' },
       update: {},
@@ -212,7 +249,7 @@ async function main() {
         isPreorder: false,
       },
     }),
-    // Tròng kính
+    // Tròng kính 1
     prisma.product.upsert({
       where: { id: '00000000-0000-0000-0000-000000000023' },
       update: {},
@@ -228,6 +265,7 @@ async function main() {
         isPreorder: false,
       },
     }),
+    // Tròng kính 2
     prisma.product.upsert({
       where: { id: '00000000-0000-0000-0000-000000000024' },
       update: {},
@@ -262,7 +300,7 @@ async function main() {
     }),
   ]);
 
-  console.log(`✅ Created ${products.length} sample products`);
+  console.log(`✅ Created ${products.length} products`);
 
   // ============================================
   // 5. INVENTORY
@@ -272,7 +310,6 @@ async function main() {
   const inventoryItems: Inventory[] = [];
 
   for (const product of products.slice(0, 4)) {
-    // Only for physical products (not services)
     for (const store of stores) {
       const inventory = await prisma.inventory.upsert({
         where: {
@@ -283,8 +320,8 @@ async function main() {
           id: `inv-${product.id.slice(-4)}-${store.id.slice(-4)}`,
           productId: product.id,
           storeId: store.id,
-          quantity: Math.floor(Math.random() * 50) + 10, // Random 10-60
-          reservedQuantity: Math.floor(Math.random() * 5), // Random 0-5
+          quantity: 50,
+          reservedQuantity: 0,
         },
       });
       inventoryItems.push(inventory as Inventory);
@@ -303,9 +340,22 @@ async function main() {
   console.log(`   - Users: ${users.length}`);
   console.log(`   - Products: ${products.length}`);
   console.log(`   - Inventory: ${inventoryItems.length}`);
-  console.log('\n💡 You can now login with:');
-  console.log('   - Email: admin@wdp.com');
-  console.log('   - Password: Admin@123');
+
+  console.log('\n🔑 Login Credentials (password: Admin@123):');
+  console.log('   ADMIN       → admin@wdp.com        | phone: 0901111111');
+  console.log('   MANAGER     → manager@wdp.com      | phone: 0902222222');
+  console.log('   OPERATION   → operation@wdp.com    | phone: 0903333333');
+  console.log('   STAFF       → staff1@wdp.com       | phone: 0904444444');
+  console.log('   STAFF       → staff2@wdp.com       | phone: 0905555555');
+  console.log('   CUSTOMER    → customer@example.com | phone: 0906666666');
+  console.log('   CUSTOMER    → customer2@example.com| phone: 0907777777');
+
+  console.log('\n📌 Postman Environment Variables (copy-paste):');
+  console.log('   base_url          → http://localhost:3000/api');
+  console.log('   store_id          → 00000000-0000-0000-0000-000000000011');
+  console.log('   frame_product_id  → 00000000-0000-0000-0000-000000000021');
+  console.log('   lens_product_id   → 00000000-0000-0000-0000-000000000023');
+  console.log('\n   ⚠️  Khi test verify order, dùng phone: 0906666666');
 }
 
 main()

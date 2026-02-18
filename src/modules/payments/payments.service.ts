@@ -28,8 +28,9 @@ class PaymentsService {
         }
 
         // 2. Validate order status
-        if (order.status !== 'NEW') {
-            throw new BadRequestError('Order must be in NEW status to create payment');
+        // Allow NEW (regular orders) or WAITING_CUSTOMER (prescription orders)
+        if (order.status !== 'NEW' && order.status !== 'WAITING_CUSTOMER') {
+            throw new BadRequestError('Order must be in NEW or WAITING_CUSTOMER status to create payment');
         }
 
         // 3. Check if payment already exists
@@ -211,10 +212,19 @@ class PaymentsService {
         transactionId: string,
         responseCode: string
     ): Promise<PaymentVerificationResult> {
+        // Update payment status
         await paymentsRepository.updateStatus(payment.id, 'SUCCESS', new Date());
 
-        // Update order status: NEW -> CONFIRMED
-        await ordersService.updatePaymentStatus(orderId, 'PAID');
+        // Check if this is a prescription order by trying to call handlePaymentSuccess
+        // If it's a prescription order, it will update both order and prescription request
+        // If it's a regular order, it will just update the order status
+        try {
+            await ordersService.handlePaymentSuccess(orderId);
+        } catch (error) {
+            // If handlePaymentSuccess fails (e.g., no prescription request), 
+            // fall back to regular payment status update
+            await ordersService.updatePaymentStatus(orderId, 'PAID');
+        }
 
         return {
             isValid: true,

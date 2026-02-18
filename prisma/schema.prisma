@@ -32,12 +32,14 @@ model User {
   updatedAt DateTime   @updatedAt @map("updated_at")
   
   // Relations
-  store                Store?          @relation(fields: [storeId], references: [id])
-  ordersAsCustomer     Order[]         @relation("CustomerOrders")
-  ordersAsHandler      Order[]         @relation("HandlerOrders")
-  prescriptionsAsCustomer Prescription[] @relation("CustomerPrescriptions")
-  prescriptionsAsMeasurer Prescription[] @relation("MeasurerPrescriptions")
-  returnRequestsAsHandler ReturnRequest[]
+  store                          Store?                 @relation(fields: [storeId], references: [id])
+  ordersAsCustomer               Order[]                @relation("CustomerOrders")
+  ordersAsHandler                Order[]                @relation("HandlerOrders")
+  prescriptionsAsCustomer        Prescription[]         @relation("CustomerPrescriptions")
+  prescriptionsAsMeasurer        Prescription[]         @relation("MeasurerPrescriptions")
+  returnRequestsAsHandler        ReturnRequest[]
+  prescriptionRequestsAsCustomer PrescriptionRequest[]  @relation("CustomerPrescriptionRequests")
+  prescriptionRequestsAsHandler  PrescriptionRequest[]  @relation("HandlerPrescriptionRequests")
   
   @@map("users")
   @@index([storeId])
@@ -71,8 +73,10 @@ model Store {
   updatedAt DateTime @updatedAt @map("updated_at")
   
   // Relations
-  users     User[]
-  inventory Inventory[]
+  users                User[]
+  inventory            Inventory[]
+  prescriptionRequests PrescriptionRequest[]
+  pickupOrders         Order[]              @relation("PickupStore")
   
   @@map("stores")
 }
@@ -193,16 +197,24 @@ model Order {
   appointmentDate   DateTime?      @map("appointment_date")
   appointmentNote   String?        @map("appointment_note") @db.Text
   handledBy         String?        @map("handled_by")
+  
+  // Prescription flow fields
+  pickupStoreId     String?        @map("pickup_store_id")
+  expiresAt         DateTime?      @map("expires_at")
+  quotedAt          DateTime?      @map("quoted_at")
+  
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
   
   // Relations
-  customer       User            @relation("CustomerOrders", fields: [customerId], references: [id])
-  handler        User?           @relation("HandlerOrders", fields: [handledBy], references: [id])
-  orderItems     OrderItem[]
-  prescription   Prescription?
-  payments       Payment[]
-  returnRequests ReturnRequest[]
+  customer            User              @relation("CustomerOrders", fields: [customerId], references: [id])
+  handler             User?             @relation("HandlerOrders", fields: [handledBy], references: [id])
+  pickupStore         Store?            @relation("PickupStore", fields: [pickupStoreId], references: [id])
+  orderItems          OrderItem[]
+  prescription        Prescription?
+  prescriptionRequest PrescriptionRequest?
+  payments            Payment[]
+  returnRequests      ReturnRequest[]
   
   @@map("orders")
   @@index([customerId])
@@ -226,6 +238,7 @@ enum OrderStatus {
   READY
   COMPLETED
   CANCELLED
+  EXPIRED
 }
 
 enum PaymentStatus {
@@ -274,6 +287,16 @@ model Prescription {
   prescriptionImageUrl  String   @map("prescription_image_url") @db.VarChar(255)
   notes                 String?  @db.Text
   measuredBy            String?  @map("measured_by")
+  
+  // Eye measurements
+  rightEyeSphere        Decimal? @map("right_eye_sphere") @db.Decimal(4, 2)
+  rightEyeCylinder      Decimal? @map("right_eye_cylinder") @db.Decimal(4, 2)
+  rightEyeAxis          Int?     @map("right_eye_axis")
+  leftEyeSphere         Decimal? @map("left_eye_sphere") @db.Decimal(4, 2)
+  leftEyeCylinder       Decimal? @map("left_eye_cylinder") @db.Decimal(4, 2)
+  leftEyeAxis           Int?     @map("left_eye_axis")
+  pupillaryDistance     Decimal? @map("pupillary_distance") @db.Decimal(4, 1)
+  
   createdAt             DateTime @default(now()) @map("created_at")
   
   // Relations
@@ -284,6 +307,72 @@ model Prescription {
   @@map("prescriptions")
   @@index([customerId])
   @@index([measuredBy])
+}
+
+// ============================================
+// PRESCRIPTION REQUESTS
+// ============================================
+
+model PrescriptionRequest {
+  id                String                      @id @default(uuid())
+  customerId        String                      @map("customer_id")
+  phone             String                      @db.VarChar(20)
+  storeId           String                      @map("store_id")
+  consultationType  ConsultationType            @map("consultation_type")
+  symptoms          String?                     @db.Text
+  status            PrescriptionRequestStatus
+  
+  contactedAt       DateTime?                   @map("contacted_at")
+  contactNotes      String?                     @map("contact_notes") @db.Text
+  handledBy         String?                     @map("handled_by")
+  
+  orderId           String?                     @unique @map("order_id")
+  appointmentDate   DateTime?                   @map("appointment_date")
+  
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+  expiresAt         DateTime?                   @map("expires_at")
+  
+  // Relations
+  customer User   @relation("CustomerPrescriptionRequests", fields: [customerId], references: [id])
+  store    Store  @relation(fields: [storeId], references: [id])
+  handler  User?  @relation("HandlerPrescriptionRequests", fields: [handledBy], references: [id])
+  order    Order? @relation(fields: [orderId], references: [id])
+  images   PrescriptionRequestImage[]
+  
+  @@map("prescription_requests")
+  @@index([customerId])
+  @@index([storeId])
+  @@index([status])
+  @@index([handledBy])
+}
+
+model PrescriptionRequestImage {
+  id        String   @id @default(uuid())
+  requestId String   @map("request_id")
+  imageUrl  String   @map("image_url") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  request PrescriptionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  @@map("prescription_request_images")
+  @@index([requestId])
+}
+
+enum ConsultationType {
+  PHONE
+  IN_STORE
+}
+
+enum PrescriptionRequestStatus {
+  PENDING
+  CONTACTING
+  QUOTED
+  ACCEPTED
+  REJECTED
+  LOST
+  EXPIRED
+  SCHEDULED
 }
 
 // ============================================

@@ -9,6 +9,8 @@ import {
     GetOrdersQuery,
     UpdateOrderStatusInput,
     CancelOrderInput,
+    VerifyOrderQuery,
+    CompleteOrderWithNotesInput,
 } from '../../validations/zod/orders.schema';
 
 class OrdersController {
@@ -252,6 +254,77 @@ class OrdersController {
             const order = await ordersService.forceUpdateStatus(orderId, data.status);
 
             res.status(200).json(apiResponse.success(order, 'Order status updated successfully'));
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @route   GET /api/orders/:id/verify
+     * @desc    Verify order for pickup (Staff)
+     * @access  Private (Staff, Operation, Admin)
+     */
+    async verifyOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const orderId = req.params.id as string;
+            const { phone } = req.query as VerifyOrderQuery;
+
+            const result = await ordersService.verifyOrderForPickup(orderId, phone);
+
+            res.status(200).json(apiResponse.success(result, 'Order verification completed'));
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @route   PATCH /api/orders/:id/complete
+     * @desc    Complete order with notes (Staff)
+     * @access  Private (Staff, Operation, Admin)
+     */
+    async completeOrderWithNotes(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const orderId = req.params.id as string;
+            const staffId = req.user!.userId;
+            const data: CompleteOrderWithNotesInput = req.body;
+
+            const order = await ordersService.completeOrderWithNotes(orderId, staffId, data.completionNote);
+
+            res.status(200).json(apiResponse.success(order, 'Order completed successfully'));
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @route   GET /api/orders/:id/prescription
+     * @desc    Get order prescription details
+     * @access  Private (Customer/Staff/Operation/Admin)
+     */
+    async getOrderPrescription(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const orderId = req.params.id as string;
+            const userId = req.user!.userId;
+            const userRole = req.user!.role;
+
+            const prescription = await ordersService.getOrderPrescription(orderId, userId, userRole);
+
+            res.status(200).json(apiResponse.success(prescription, 'Prescription retrieved successfully'));
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @route   POST /api/orders/expire-unpaid
+     * @desc    Manually trigger expiry of unpaid orders (Admin/Operation)
+     * @access  Private (Admin, Operation)
+     */
+    async expireUnpaidOrders(_req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const result = await ordersService.expireUnpaidOrders();
+
+            res.status(200).json(apiResponse.success(result, `Expired ${result.expiredCount} unpaid order(s)`));
         } catch (error) {
             next(error);
         }
