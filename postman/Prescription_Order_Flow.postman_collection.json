@@ -1,0 +1,706 @@
+{
+	"info": {
+		"_postman_id": "prescription-order-flow-2024",
+		"name": "Prescription Order Flow - Complete Test",
+		"description": "Test toàn bộ luồng đơn hàng kính mắt theo đơn thuốc từ A-Z\n\n⚠️ SETUP: Tạo Environment với các biến sau:\n- base_url: http://localhost:3000/api\n- store_id: 00000000-0000-0000-0000-000000000011\n- frame_product_id: 00000000-0000-0000-0000-000000000021\n- lens_product_id: 00000000-0000-0000-0000-000000000023",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Setup - Login",
+			"item": [
+				{
+					"name": "Login as Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"customer_token\", jsonData.data.accessToken);",
+									"    pm.environment.set(\"customer_id\", jsonData.data.user.id);",
+									"    console.log(\"✅ Customer Token saved\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "📧 customer@example.com / Admin@123\n📱 Phone: 0906666666 (dùng khi verify)"
+					}
+				},
+				{
+					"name": "Login as Operation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"operation_token\", jsonData.data.accessToken);",
+									"    console.log(\"✅ Operation Token saved\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"operation@wdp.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "📧 operation@wdp.com / Admin@123"
+					}
+				},
+				{
+					"name": "Login as Staff",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"staff_token\", jsonData.data.accessToken);",
+									"    console.log(\"✅ Staff Token saved\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"staff1@wdp.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "📧 staff1@wdp.com / Admin@123"
+					}
+				}
+			]
+		},
+		{
+			"name": "1. Phase 1 - Customer tạo Request",
+			"item": [
+				{
+					"name": "Create Prescription Request (with image)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Request created - status PENDING\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"PENDING\");",
+									"    pm.environment.set(\"request_id\", jsonData.data.id);",
+									"    console.log(\"✅ Request ID:\", jsonData.data.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{customer_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "phone", "value": "0906666666", "type": "text" },
+								{ "key": "storeId", "value": "{{store_id}}", "type": "text" },
+								{ "key": "consultationType", "value": "PHONE", "type": "text" },
+								{ "key": "symptoms", "value": "Mắt mờ khi nhìn xa, đau đầu khi đọc sách lâu", "type": "text" },
+								{
+									"key": "images",
+									"type": "file",
+									"src": [],
+									"description": "Upload 1-3 ảnh đơn thuốc (JPG/PNG)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/prescription-requests",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests"]
+						},
+						"description": "⚠️ Body dạng form-data, cần upload ít nhất 1 ảnh vào field 'images'"
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Phase 2 - Operation xử lý",
+			"item": [
+				{
+					"name": "Get Pending Requests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get requests OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Total PENDING:\", jsonData.data.length);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/prescription-requests?status=PENDING",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests"],
+							"query": [{ "key": "status", "value": "PENDING" }]
+						}
+					}
+				},
+				{
+					"name": "Get Request Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get details OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Images:\", jsonData.data.images?.length);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/prescription-requests/{{request_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests", "{{request_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Contact Status → CONTACTING",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status updated to CONTACTING\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"CONTACTING\");",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"CONTACTING\",\n  \"contactNotes\": \"Đã gọi điện, khách cần gọng nhựa màu đen, tròng chống ánh sáng xanh\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/prescription-requests/{{request_id}}/contact",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests", "{{request_id}}", "contact"]
+						}
+					}
+				},
+				{
+					"name": "Create Order from Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order created - WAITING_CUSTOMER\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"WAITING_CUSTOMER\");",
+									"    pm.expect(jsonData.data.paymentStatus).to.eql(\"UNPAID\");",
+									"    pm.environment.set(\"order_id\", jsonData.data.id);",
+									"    console.log(\"✅ Order ID:\", jsonData.data.id);",
+									"    console.log(\"   Total:\", jsonData.data.totalAmount);",
+									"    console.log(\"   Expires:\", jsonData.data.expiresAt);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderItems\": [\n    {\n      \"productId\": \"00000000-0000-0000-0000-000000000021\",\n      \"quantity\": 1,\n      \"unitPrice\": 1500000\n    },\n    {\n      \"productId\": \"00000000-0000-0000-0000-000000000023\",\n      \"quantity\": 1,\n      \"unitPrice\": 800000\n    }\n  ],\n  \"prescriptionData\": {\n    \"rightEyeSphere\": -2.5,\n    \"rightEyeCylinder\": -0.5,\n    \"rightEyeAxis\": 90,\n    \"leftEyeSphere\": -2.75,\n    \"leftEyeCylinder\": -0.75,\n    \"leftEyeAxis\": 85,\n    \"pupillaryDistance\": 62,\n    \"notes\": \"Khách cần tròng chống ánh sáng xanh\"\n  },\n  \"expectedReadyDate\": \"2026-03-01T00:00:00Z\",\n  \"expiryDays\": 3\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/prescription-requests/{{request_id}}/create-order",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests", "{{request_id}}", "create-order"]
+						},
+						"description": "Tạo order báo giá:\n- Frame: Rayban Classic (1,500,000đ)\n- Lens: Essilor (800,000đ)\n- Total: 2,300,000đ\n- Expires: 3 ngày"
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Phase 3 - Customer thanh toán",
+			"item": [
+				{
+					"name": "Get Order Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order is WAITING_CUSTOMER\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"WAITING_CUSTOMER\");",
+									"    console.log(\"Status:\", jsonData.data.status);",
+									"    console.log(\"Payment:\", jsonData.data.paymentStatus);",
+									"    console.log(\"Total:\", jsonData.data.totalAmount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{customer_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Create VNPay Payment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Payment URL created\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"payment_url\", jsonData.data.paymentUrl);",
+									"    console.log(\"✅ Payment URL:\", jsonData.data.paymentUrl);",
+									"    console.log(\"\");",
+									"    console.log(\"🔗 Mở URL trên trong browser để thanh toán!\");",
+									"    console.log(\"💳 Thẻ test NCB: 9704198526191432198\");",
+									"    console.log(\"👤 Tên: NGUYEN VAN A\");",
+									"    console.log(\"📅 Ngày PH: 07/15\");",
+									"    console.log(\"🔑 OTP: 123456\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{customer_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderId\": \"{{order_id}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/create",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "create"]
+						},
+						"description": "💳 Thẻ test VNPay Sandbox:\n- Ngân hàng: NCB\n- Số thẻ: 9704198526191432198\n- Tên: NGUYEN VAN A\n- Ngày PH: 07/15\n- OTP: 123456"
+					}
+				},
+				{
+					"name": "Check Order After Payment (CONFIRMED)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order is CONFIRMED after payment\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"CONFIRMED\");",
+									"    pm.expect(jsonData.data.paymentStatus).to.eql(\"PAID\");",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"    console.log(\"✅ Payment:\", jsonData.data.paymentStatus);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{customer_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}"]
+						},
+						"description": "Chạy sau khi thanh toán VNPay thành công"
+					}
+				},
+				{
+					"name": "Get Prescription Details",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Prescription retrieved\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Right Eye:\", JSON.stringify(jsonData.data.prescription.rightEye));",
+									"    console.log(\"Left Eye:\", JSON.stringify(jsonData.data.prescription.leftEye));",
+									"    console.log(\"PD:\", jsonData.data.prescription.pupillaryDistance);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{customer_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/prescription",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "prescription"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Phase 4 - Production",
+			"item": [
+				{
+					"name": "Start Processing",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order is PROCESSING\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{staff_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/start-processing",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "start-processing"]
+						}
+					}
+				},
+				{
+					"name": "Mark as Ready",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order is READY\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"READY\");",
+									"    console.log(\"✅ Order READY for pickup!\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{staff_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/mark-ready",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "mark-ready"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Phase 5 - Pickup",
+			"item": [
+				{
+					"name": "Verify Customer at Pickup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Customer verified\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.verified).to.be.true;",
+									"    pm.expect(jsonData.data.isPaid).to.be.true;",
+									"    console.log(\"✅ Verified:\", jsonData.data.verified);",
+									"    console.log(\"✅ Paid:\", jsonData.data.isPaid);",
+									"    console.log(\"   Customer:\", jsonData.data.customer.fullName);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{staff_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/verify?phone=0906666666",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "verify"],
+							"query": [{ "key": "phone", "value": "0906666666" }]
+						},
+						"description": "📱 Phone của customer@example.com là 0906666666"
+					}
+				},
+				{
+					"name": "Complete Order with Notes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order COMPLETED\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.status).to.eql(\"COMPLETED\");",
+									"    console.log(\"🎉 Order COMPLETED!\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{staff_token}}", "type": "string" }]
+						},
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"completionNote\": \"Đã giao hàng, khách hài lòng với sản phẩm\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/{{order_id}}/complete-with-notes",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{order_id}}", "complete-with-notes"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Extra Tests",
+			"item": [
+				{
+					"name": "Schedule Appointment (thay vì create order)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"appointmentDate\": \"2026-03-01T14:00:00Z\",\n  \"appointmentNote\": \"Khách muốn thử gọng trực tiếp\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/prescription-requests/{{request_id}}/schedule",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests", "{{request_id}}", "schedule"]
+						}
+					}
+				},
+				{
+					"name": "Close Request (LOST)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"LOST\",\n  \"contactNotes\": \"Khách đã mua ở chỗ khác\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/prescription-requests/{{request_id}}/close",
+							"host": ["{{base_url}}"],
+							"path": ["prescription-requests", "{{request_id}}", "close"]
+						}
+					}
+				},
+				{
+					"name": "Expire Unpaid Orders (Manual Trigger)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Expire triggered\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Expired count:\", jsonData.data.expiredCount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{operation_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/orders/expire-unpaid",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "expire-unpaid"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:3000/api", "type": "string" },
+		{ "key": "customer_token", "value": "", "type": "string" },
+		{ "key": "operation_token", "value": "", "type": "string" },
+		{ "key": "staff_token", "value": "", "type": "string" },
+		{ "key": "request_id", "value": "", "type": "string" },
+		{ "key": "order_id", "value": "", "type": "string" },
+		{ "key": "store_id", "value": "00000000-0000-0000-0000-000000000011", "type": "string" },
+		{ "key": "frame_product_id", "value": "00000000-0000-0000-0000-000000000021", "type": "string" },
+		{ "key": "lens_product_id", "value": "00000000-0000-0000-0000-000000000023", "type": "string" }
+	]
+}

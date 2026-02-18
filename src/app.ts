@@ -64,6 +64,7 @@ import storesRoutes from './modules/stores/stores.routes';
 import inventoryRoutes from './modules/inventory/inventory.routes';
 import ordersRoutes from './modules/orders/orders.routes';
 import paymentsRoutes from './modules/payments/payments.routes';
+import prescriptionRequestsRoutes from './modules/prescription-requests/prescription-requests.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
@@ -74,6 +75,7 @@ app.use(`${ENV.API_PREFIX}/products`, productImagesRoutes);
 app.use(`${ENV.API_PREFIX}/inventory`, inventoryRoutes);
 app.use(`${ENV.API_PREFIX}/orders`, ordersRoutes);
 app.use(`${ENV.API_PREFIX}/payments`, paymentsRoutes);
+app.use(`${ENV.API_PREFIX}/prescription-requests`, prescriptionRequestsRoutes);
 
 // 404 handler
 app.use((req, res) => {

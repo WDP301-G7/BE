@@ -30,6 +30,7 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     READY: ['COMPLETED', 'CANCELLED'],
     COMPLETED: [],
     CANCELLED: [],
+    EXPIRED: [],
 };
 
 class OrdersService {
@@ -520,6 +521,286 @@ class OrdersService {
         }
 
         return await ordersRepository.updatePaymentStatus(orderId, paymentStatus);
+    }
+
+    /**
+     * Verify order for pickup (Staff)
+     * - Validate customer phone matches
+     * - Return order details for verification
+     */
+    async verifyOrderForPickup(orderId: string, phone: string): Promise<{
+        verified: boolean;
+        customer: any;
+        isPaid: boolean;
+        order: OrderWithRelations;
+    }> {
+        const order = await ordersRepository.findById(orderId);
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        // Check if customer phone matches
+        const customerPhone = order.customer.phone;
+        const verified = customerPhone === phone;
+
+        return {
+            verified,
+            customer: {
+                id: order.customer.id,
+                fullName: order.customer.fullName,
+                phone: order.customer.phone,
+                email: order.customer.email,
+            },
+            isPaid: order.paymentStatus === 'PAID',
+            order,
+        };
+    }
+
+    /**
+     * Complete order with notes (Staff)
+     * - Enhanced version with completion notes
+     * - Track which staff completed the order
+     */
+    async completeOrderWithNotes(orderId: string, staffId: string, completionNote?: string): Promise<Order> {
+        const order = await ordersRepository.findById(orderId);
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        if (order.status !== 'READY') {
+            throw new BadRequestError('Order must be in READY status to complete');
+        }
+
+        this.validateStatusTransition(order.status, 'COMPLETED');
+
+        // Transaction: Update order + Update inventory
+        const updateOperations: Array<(tx: any) => Promise<any>> = [];
+
+        // Check and calculate inventory updates
+        for (const item of order.orderItems) {
+            if (item.product.type === 'SERVICE') continue;
+
+            const inventories = await inventoryRepository.getByProduct(item.productId);
+            inventories.sort((a, b) => b.reservedQuantity - a.reservedQuantity);
+
+            let remainingQty = item.quantity;
+            for (const inv of inventories) {
+                if (remainingQty <= 0) break;
+
+                const toProcess = Math.min(inv.reservedQuantity, remainingQty);
+                if (toProcess > 0) {
+                    updateOperations.push((tx) =>
+                        tx.inventory.update({
+                            where: { id: inv.id },
+                            data: {
+                                quantity: { decrement: toProcess },
+                                reservedQuantity: { decrement: toProcess },
+                            },
+                        })
+                    );
+                    remainingQty -= toProcess;
+                }
+            }
+
+            if (remainingQty > 0) {
+                throw new BadRequestError(
+                    `Insufficient inventory for product ${item.productId}. Need ${item.quantity}, found ${item.quantity - remainingQty} reserved.`
+                );
+            }
+        }
+
+        // Execute transaction
+        try {
+            return await prisma.$transaction(async (tx) => {
+                // Update order status with completion note
+                const completedOrder = await tx.order.update({
+                    where: { id: orderId },
+                    data: {
+                        status: 'COMPLETED',
+                        handledBy: staffId,
+                        appointmentNote: completionNote
+                            ? `${order.appointmentNote || ''}\n[Completion] ${completionNote}`.trim()
+                            : order.appointmentNote,
+                    },
+                });
+
+                // Execute inventory updates
+                for (const operation of updateOperations) {
+                    await operation(tx);
+                }
+
+                // Update order items status
+                await tx.orderItem.updateMany({
+                    where: { orderId },
+                    data: { itemStatus: 'DELIVERED' },
+                });
+
+                return completedOrder;
+            }, {
+                maxWait: 5000,
+                timeout: 15000,
+            });
+        } catch (error: any) {
+            console.error('Complete Order DB Error:', error);
+            if (error instanceof AppError) throw error;
+            throw new BadRequestError(`Database operation failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get order prescription details
+     * - Return prescription with eye measurements
+     * - Include prescription images from request
+     */
+    async getOrderPrescription(orderId: string, userId: string, userRole: string): Promise<any> {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                prescription: true,
+                prescriptionRequest: {
+                    include: {
+                        images: true,
+                    },
+                },
+                customer: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+            },
+        });
+
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        // Authorization: Customer can only view their own orders
+        if (userRole === 'CUSTOMER' && order.customerId !== userId) {
+            throw new ForbiddenError('You can only view your own order prescriptions');
+        }
+
+        if (!order.prescription) {
+            throw new NotFoundError('No prescription found for this order');
+        }
+
+        return {
+            orderId: order.id,
+            customer: order.customer,
+            prescription: {
+                id: order.prescription.id,
+                rightEye: {
+                    sphere: order.prescription.rightEyeSphere,
+                    cylinder: order.prescription.rightEyeCylinder,
+                    axis: order.prescription.rightEyeAxis,
+                },
+                leftEye: {
+                    sphere: order.prescription.leftEyeSphere,
+                    cylinder: order.prescription.leftEyeCylinder,
+                    axis: order.prescription.leftEyeAxis,
+                },
+                pupillaryDistance: order.prescription.pupillaryDistance,
+                notes: order.prescription.notes,
+                prescriptionImageUrl: order.prescription.prescriptionImageUrl,
+                measuredBy: order.prescription.measuredBy,
+                createdAt: order.prescription.createdAt,
+            },
+            prescriptionRequestImages: order.prescriptionRequest?.images || [],
+        };
+    }
+
+    /**
+     * Handle payment success for prescription orders
+     * - Update order status: WAITING_CUSTOMER → CONFIRMED
+     * - Update payment status: UNPAID → PAID
+     * - Update prescription request status: QUOTED → ACCEPTED
+     */
+    async handlePaymentSuccess(orderId: string): Promise<Order> {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+                prescriptionRequest: true,
+            },
+        });
+
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        // Update order and prescription request in transaction
+        return await prisma.$transaction(async (tx) => {
+            // Update order
+            const updatedOrder = await tx.order.update({
+                where: { id: orderId },
+                data: {
+                    paymentStatus: 'PAID',
+                    status: order.status === 'WAITING_CUSTOMER' ? 'CONFIRMED' : order.status,
+                },
+            });
+
+            // Update prescription request if exists
+            if (order.prescriptionRequest) {
+                await tx.prescriptionRequest.update({
+                    where: { id: order.prescriptionRequest.id },
+                    data: {
+                        status: 'ACCEPTED',
+                    },
+                });
+            }
+
+            return updatedOrder;
+        });
+    }
+
+    /**
+     * Expire unpaid orders
+     * - Find orders past expiresAt
+     * - Update order status: WAITING_CUSTOMER → EXPIRED
+     * - Update prescription request status: QUOTED → EXPIRED
+     */
+    async expireUnpaidOrders(): Promise<{ expiredCount: number }> {
+        const now = new Date();
+
+        // Find expired orders
+        const expiredOrders = await prisma.order.findMany({
+            where: {
+                status: 'WAITING_CUSTOMER',
+                paymentStatus: 'UNPAID',
+                expiresAt: {
+                    lt: now,
+                },
+            },
+            include: {
+                prescriptionRequest: true,
+            },
+        });
+
+        // Update each order in transaction
+        for (const order of expiredOrders) {
+            await prisma.$transaction(async (tx) => {
+                // Update order status
+                await tx.order.update({
+                    where: { id: order.id },
+                    data: {
+                        status: 'EXPIRED',
+                    },
+                });
+
+                // Update prescription request if exists
+                if (order.prescriptionRequest) {
+                    await tx.prescriptionRequest.update({
+                        where: { id: order.prescriptionRequest.id },
+                        data: {
+                            status: 'EXPIRED',
+                        },
+                    });
+                }
+            });
+        }
+
+        return { expiredCount: expiredOrders.length };
     }
 }
 

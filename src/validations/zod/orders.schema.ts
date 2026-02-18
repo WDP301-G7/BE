@@ -95,6 +95,30 @@ export const cancelOrderSchema = z.object({
     }),
 });
 
+/**
+ * Schema for verifying order at pickup
+ */
+export const verifyOrderSchema = z.object({
+    query: z.object({
+        phone: z.string().min(10, 'Phone number must be at least 10 characters').max(20, 'Phone number too long'),
+    }),
+    params: z.object({
+        id: z.string().uuid('Invalid order ID'),
+    }),
+});
+
+/**
+ * Schema for completing order with notes
+ */
+export const completeOrderWithNotesSchema = z.object({
+    body: z.object({
+        completionNote: z.string().max(500, 'Completion note too long').optional(),
+    }),
+    params: z.object({
+        id: z.string().uuid('Invalid order ID'),
+    }),
+});
+
 // Type exports for TypeScript
 export type CreateOrderInput = z.infer<typeof createOrderSchema>['body'];
 export type ConfirmOrderInput = z.infer<typeof confirmOrderSchema>['body'];
@@ -102,3 +126,5 @@ export type UpdateAppointmentInput = z.infer<typeof updateAppointmentSchema>['bo
 export type GetOrdersQuery = z.infer<typeof getOrdersQuerySchema>['query'];
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>['body'];
 export type CancelOrderInput = z.infer<typeof cancelOrderSchema>['body'];
+export type VerifyOrderQuery = z.infer<typeof verifyOrderSchema>['query'];
+export type CompleteOrderWithNotesInput = z.infer<typeof completeOrderWithNotesSchema>['body'];
