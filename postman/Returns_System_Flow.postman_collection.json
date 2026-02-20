@@ -1,0 +1,1227 @@
+{
+	"info": {
+		"_postman_id": "returns-system-flow-2026",
+		"name": "Returns System - Complete Test",
+		"description": "Test hệ thống đổi trả (RETURN, EXCHANGE, WARRANTY)\n\n⚠️ SETUP:\n1. Chạy seed: npm run prisma:seed\n2. Chạy server: npm run dev\n3. Chạy folder '0. Setup' để login và tạo order test\n4. Chạy các flow test\n\n📧 Accounts (password: Admin@123):\n- customer@example.com (CUSTOMER)\n- operation@wdp.com (OPERATION)\n- staff1@wdp.com (STAFF)\n- admin@wdp.com (ADMIN)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Setup",
+			"item": [
+				{
+					"name": "0.1 Login as Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"customer_token\", jsonData.data.accessToken);",
+									"    pm.environment.set(\"customer_id\", jsonData.data.user.id);",
+									"    console.log(\"✅ Customer logged in\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "0.2 Login as Operation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"operation_token\", jsonData.data.accessToken);",
+									"    console.log(\"✅ Operation logged in\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"operation@wdp.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "0.3 Login as Staff",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"staff_token\", jsonData.data.accessToken);",
+									"    console.log(\"✅ Staff logged in\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"staff1@wdp.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "0.4 Login as Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Login successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"admin_token\", jsonData.data.accessToken);",
+									"    console.log(\"✅ Admin logged in\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@wdp.com\",\n  \"password\": \"Admin@123\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "0.5 Create Test Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"test_order_id\", jsonData.data.id);",
+									"    pm.environment.set(\"order_item_id\", jsonData.data.orderItems[0].id);",
+									"    pm.environment.set(\"product_id\", jsonData.data.orderItems[0].productId);",
+									"    console.log(\"✅ Test Order ID:\", jsonData.data.id);",
+									"    console.log(\"✅ Order Item ID:\", jsonData.data.orderItems[0].id);",
+									"    console.log(\"✅ Product ID:\", jsonData.data.orderItems[0].productId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"items\": [\n    {\n      \"productId\": \"00000000-0000-0000-0000-000000000021\",\n      \"quantity\": 1\n    },\n    {\n      \"productId\": \"00000000-0000-0000-0000-000000000023\",\n      \"quantity\": 1\n    }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/orders",
+							"host": ["{{base_url}}"],
+							"path": ["orders"]
+						},
+						"description": "Tạo order với:\n- Frame: Rayban Classic (ID: ...21)\n- Lens: Essilor (ID: ...23)"
+					}
+				},
+				{
+					"name": "0.6 Create Payment for Test Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Payment created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Payment URL:\", jsonData.data.paymentUrl);",
+									"    console.log(\"⚠️ Bỏ qua thanh toán VNPay, sẽ force update order status\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/payments/{{test_order_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["payments", "{{test_order_id}}"]
+						}
+					}
+				},
+				{
+					"name": "0.7 [Admin] Force Complete Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Order completed\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Order Status:\", jsonData.data.status);",
+									"    console.log(\"✅ Ready to test returns!\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"COMPLETED\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/{{test_order_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "{{test_order_id}}", "status"]
+						},
+						"description": "Force update order status để test returns"
+					}
+				}
+			],
+			"description": "⚠️ CHẠY FOLDER NÀY TRƯỚC để:\n1. Login tất cả roles\n2. Tạo order test\n3. Complete order để sẵn sàng test returns"
+		},
+		{
+			"name": "1. RETURN Flow (Trả hàng)",
+			"item": [
+				{
+					"name": "1.1 [Customer] Create RETURN Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Return request created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"return_request_id\", jsonData.data.id);",
+									"    console.log(\"✅ Return Request ID:\", jsonData.data.id);",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "orderId",
+									"value": "{{test_order_id}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "RETURN",
+									"type": "text"
+								},
+								{
+									"key": "reason",
+									"value": "Sản phẩm không vừa với khuôn mặt",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Gọng kính hơi rộng, không phù hợp. Muốn trả lại và nhận tiền.",
+									"type": "text"
+								},
+								{
+									"key": "items",
+									"value": "[{\"orderItemId\":\"{{order_item_id}}\",\"productId\":\"{{product_id}}\",\"quantity\":1,\"condition\":\"NEW\"}]",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Chọn ảnh từ máy tính (1-5 ảnh)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns",
+							"host": ["{{base_url}}"],
+							"path": ["returns"]
+						},
+						"description": "📝 Customer tạo yêu cầu trả hàng\n\n✅ Validate:\n- Order COMPLETED\n- Trong 7 ngày\n- Không phải PRESCRIPTION\n- Upload 1-5 ảnh"
+					}
+				},
+				{
+					"name": "1.2 [Customer] Get My Returns",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get returns successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Total:\", jsonData.data.meta.total);",
+									"    console.log(\"📋 Returns:\", jsonData.data.data.map(r => ({id: r.id, type: r.type, status: r.status})));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/returns/my?page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "my"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "10" }
+							]
+						}
+					}
+				},
+				{
+					"name": "1.3 [Customer] Get Return Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get detail successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"📦 Type:\", jsonData.data.type);",
+									"    console.log(\"📊 Status:\", jsonData.data.status);",
+									"    console.log(\"🖼️ Images:\", jsonData.data.images.length);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/returns/{{return_request_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{return_request_id}}"]
+						}
+					}
+				},
+				{
+					"name": "1.4 [Operation] Get All Returns",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Get all returns successful\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Total PENDING:\", jsonData.data.meta.total);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operation_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/returns?status=PENDING&page=1&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["returns"],
+							"query": [
+								{ "key": "status", "value": "PENDING" },
+								{ "key": "page", "value": "1" },
+								{ "key": "limit", "value": "10" }
+							]
+						}
+					}
+				},
+				{
+					"name": "1.5 [Operation] Approve RETURN",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Return approved\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"    console.log(\"✅ Approved at:\", jsonData.data.approvedAt);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operation_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Đã kiểm tra điều kiện, phê duyệt trả hàng\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{return_request_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{return_request_id}}", "approve"]
+						},
+						"description": "✅ Operation phê duyệt\nStatus: PENDING → APPROVED"
+					}
+				},
+				{
+					"name": "1.6 [Staff] Complete RETURN",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Return completed\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"    console.log(\"💰 Refund Amount:\", jsonData.data.refundAmount);",
+									"    console.log(\"💵 Refund Method:\", jsonData.data.refundMethod);",
+									"    console.log(\"✅ Completed at:\", jsonData.data.completedAt);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{staff_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "refundAmount",
+									"value": "500000",
+									"type": "text"
+								},
+								{
+									"key": "refundMethod",
+									"value": "CASH",
+									"type": "text"
+								},
+								{
+									"key": "completionNote",
+									"value": "Đã kiểm tra sản phẩm, tình trạng tốt. Hoàn tiền mặt 500,000 VND cho khách.",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Chọn ảnh kiểm tra (optional, 0-10 ảnh)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{return_request_id}}/complete",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{return_request_id}}", "complete"]
+						},
+						"description": "✅ Staff hoàn tất:\n- Hoàn tiền\n- Upload ảnh\n- Nhập lại kho\n\nStatus: APPROVED → COMPLETED"
+					}
+				}
+			]
+		},
+		{
+			"name": "2. EXCHANGE Flow (Đổi hàng)",
+			"item": [
+				{
+					"name": "2.1 [Customer] Create EXCHANGE Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Exchange request created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"exchange_request_id\", jsonData.data.id);",
+									"    console.log(\"✅ Exchange Request ID:\", jsonData.data.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "orderId",
+									"value": "{{test_order_id}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "EXCHANGE",
+									"type": "text"
+								},
+								{
+									"key": "reason",
+									"value": "Muốn đổi sang mẫu Gucci cao cấp hơn",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Gọng Rayban không phù hợp phong cách, muốn đổi sang Gucci",
+									"type": "text"
+								},
+								{
+									"key": "items",
+									"value": "[{\"orderItemId\":\"{{order_item_id}}\",\"productId\":\"00000000-0000-0000-0000-000000000021\",\"quantity\":1,\"condition\":\"LIKE_NEW\",\"exchangeProductId\":\"00000000-0000-0000-0000-000000000022\"}]",
+									"type": "text",
+									"description": "Đổi Rayban (21) → Gucci (22)"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Chọn ảnh sản phẩm cũ"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns",
+							"host": ["{{base_url}}"],
+							"path": ["returns"]
+						},
+						"description": "📝 Đổi Rayban (300k) → Gucci (800k)\nChênh lệch: +500k"
+					}
+				},
+				{
+					"name": "2.2 [Operation] Approve EXCHANGE",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Exchange approved\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"    console.log(\"💰 Price Difference:\", jsonData.data.priceDifference);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operation_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Sản phẩm mới có sẵn, phê duyệt đổi hàng\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{exchange_request_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{exchange_request_id}}", "approve"]
+						},
+						"description": "✅ Operation phê duyệt\n🔢 Tự động tính chênh lệch: 800k - 300k = +500k"
+					}
+				},
+				{
+					"name": "2.3 [Staff] Complete EXCHANGE",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Exchange completed\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✅ Status:\", jsonData.data.status);",
+									"    console.log(\"✅ Completed!\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{staff_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "completionNote",
+									"value": "Đã kiểm tra sản phẩm cũ (tình trạng tốt). Thu thêm 500,000 VND. Giao Gucci mới cho khách.",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Ảnh kiểm tra (optional)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{exchange_request_id}}/complete",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{exchange_request_id}}", "complete"]
+						},
+						"description": "✅ Staff hoàn tất:\n- Thu 500k chênh lệch\n- Giao Gucci mới\n- Nhập Rayban cũ vào kho\n- Xuất Gucci khỏi kho"
+					}
+				}
+			],
+			"description": "🔄 Test đổi hàng với chênh lệch giá"
+		},
+		{
+			"name": "3. WARRANTY Flow (Bảo hành)",
+			"item": [
+				{
+					"name": "3.1 [Customer] Create WARRANTY Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Warranty request created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"warranty_request_id\", jsonData.data.id);",
+									"    console.log(\"✅ Warranty Request ID:\", jsonData.data.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "orderId",
+									"value": "{{test_order_id}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "WARRANTY",
+									"type": "text"
+								},
+								{
+									"key": "reason",
+									"value": "Chân kính bị gãy",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Chân kính bên phải bị gãy sau 2 tháng sử dụng bình thường. Nghi ngờ lỗi sản xuất.",
+									"type": "text"
+								},
+								{
+									"key": "items",
+									"value": "[{\"orderItemId\":\"{{order_item_id}}\",\"productId\":\"00000000-0000-0000-0000-000000000021\",\"quantity\":1,\"condition\":\"DEFECTIVE\"}]",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Ảnh lỗi chi tiết"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns",
+							"host": ["{{base_url}}"],
+							"path": ["returns"]
+						},
+						"description": "🔧 Yêu cầu bảo hành (trong 6 tháng)"
+					}
+				},
+				{
+					"name": "3.2 [Operation] Approve WARRANTY",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Warranty approved\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    console.log(\"✅ Warranty approved\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operation_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Xác nhận lỗi sản xuất, phê duyệt bảo hành\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{warranty_request_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{warranty_request_id}}", "approve"]
+						}
+					}
+				},
+				{
+					"name": "3.3 [Staff] Complete WARRANTY",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Warranty completed\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    console.log(\"✅ Warranty completed\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{staff_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "completionNote",
+									"value": "Đã thay thế chân kính mới. Bảo hành hoàn tất.",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": "",
+									"description": "⚠️ Ảnh hoàn tất (optional)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{warranty_request_id}}/complete",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{warranty_request_id}}", "complete"]
+						},
+						"description": "🔧 Staff hoàn tất bảo hành"
+					}
+				}
+			],
+			"description": "🔧 Test bảo hành"
+		},
+		{
+			"name": "4. Reject & Cancel",
+			"item": [
+				{
+					"name": "4.1 [Customer] Create Request (to reject)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Request created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"reject_request_id\", jsonData.data.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "orderId",
+									"value": "{{test_order_id}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "RETURN",
+									"type": "text"
+								},
+								{
+									"key": "reason",
+									"value": "Test reject - sản phẩm hư hỏng",
+									"type": "text"
+								},
+								{
+									"key": "items",
+									"value": "[{\"orderItemId\":\"{{order_item_id}}\",\"productId\":\"00000000-0000-0000-0000-000000000021\",\"quantity\":1,\"condition\":\"DAMAGED\"}]",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": ""
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns",
+							"host": ["{{base_url}}"],
+							"path": ["returns"]
+						}
+					}
+				},
+				{
+					"name": "4.2 [Operation] Reject Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Request rejected\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"❌ Status:\", jsonData.data.status);",
+									"    console.log(\"❌ Reason:\", jsonData.data.rejectionReason);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{operation_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rejectionReason\": \"Sản phẩm đã bị hư hỏng do người dùng, không đủ điều kiện trả hàng theo chính sách\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{reject_request_id}}/reject",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{reject_request_id}}", "reject"]
+						},
+						"description": "❌ Operation từ chối\nStatus: PENDING → REJECTED"
+					}
+				},
+				{
+					"name": "4.3 [Customer] Create Request (to cancel)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Request created\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"cancel_request_id\", jsonData.data.id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "orderId",
+									"value": "{{test_order_id}}",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "RETURN",
+									"type": "text"
+								},
+								{
+									"key": "reason",
+									"value": "Tạo nhầm, muốn hủy",
+									"type": "text"
+								},
+								{
+									"key": "items",
+									"value": "[{\"orderItemId\":\"{{order_item_id}}\",\"productId\":\"{{product_id}}\",\"quantity\":1,\"condition\":\"NEW\"}]",
+									"type": "text"
+								},
+								{
+									"key": "images",
+									"type": "file",
+									"src": ""
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/returns",
+							"host": ["{{base_url}}"],
+							"path": ["returns"]
+						}
+					}
+				},
+				{
+					"name": "4.4 [Customer] Cancel Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Request cancelled\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    console.log(\"✅ Request cancelled by customer\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/returns/{{cancel_request_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{cancel_request_id}}"]
+						},
+						"description": "❌ Customer tự hủy (chỉ khi PENDING)"
+					}
+				}
+			],
+			"description": "❌ Test từ chối và hủy"
+		},
+		{
+			"name": "5. Admin Functions",
+			"item": [
+				{
+					"name": "5.1 [Admin] Get Statistics",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Stats retrieved\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"📊 Total Returns:\", jsonData.data.totalReturns);",
+									"    console.log(\"📊 By Status:\", JSON.stringify(jsonData.data.byStatus, null, 2));",
+									"    console.log(\"📊 By Type:\", JSON.stringify(jsonData.data.byType, null, 2));",
+									"    console.log(\"💰 Total Refund:\", jsonData.data.totalRefundAmount);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/returns/stats",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "stats"]
+						},
+						"description": "📊 Thống kê tổng quan"
+					}
+				},
+				{
+					"name": "5.2 [Admin] Force Update Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"COMPLETED\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/returns/{{return_request_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["returns", "{{return_request_id}}", "status"]
+						},
+						"description": "⚠️ Admin force update (bypass validation)"
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Set base_url if not exists",
+					"if (!pm.environment.get(\"base_url\")) {",
+					"    pm.environment.set(\"base_url\", \"http://localhost:3000/api\");",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000/api",
+			"type": "string"
+		}
+	]
+}

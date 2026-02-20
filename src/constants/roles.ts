@@ -106,6 +106,8 @@ export const ROLE_PERMISSIONS = {
     'orders:write',
     'prescriptions:read',
     'prescriptions:write',
+    'returns:read',
+    'returns:write',
     'profile:read',
     'profile:write',
   ],
