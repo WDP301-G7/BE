@@ -76,3 +76,15 @@ export const uploadPrescriptionImages = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit per file
   },
 }).array('images', 3);
+
+// Create multer upload instance for return request images (1-10 images)
+export const uploadReturnImages = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+  },
+});
+
+// Export as 'upload' for convenience
+export const upload = uploadReturnImages;

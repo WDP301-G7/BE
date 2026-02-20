@@ -37,7 +37,9 @@ model User {
   ordersAsHandler                Order[]                @relation("HandlerOrders")
   prescriptionsAsCustomer        Prescription[]         @relation("CustomerPrescriptions")
   prescriptionsAsMeasurer        Prescription[]         @relation("MeasurerPrescriptions")
-  returnRequestsAsHandler        ReturnRequest[]
+  returnRequestsAsCustomer       ReturnRequest[]        @relation("CustomerReturnRequests")
+  returnRequestsAsHandler        ReturnRequest[]        @relation("HandlerReturnRequests")
+  returnImageUploads             ReturnRequestImage[]   @relation("ReturnImageUploader")
   prescriptionRequestsAsCustomer PrescriptionRequest[]  @relation("CustomerPrescriptionRequests")
   prescriptionRequestsAsHandler  PrescriptionRequest[]  @relation("HandlerPrescriptionRequests")
   
@@ -118,10 +120,12 @@ model Product {
   updatedAt     DateTime    @updatedAt @map("updated_at")
   
   // Relations
-  category      Category       @relation(fields: [categoryId], references: [id])
-  images        ProductImage[]
-  inventory     Inventory[]
-  orderItems    OrderItem[]
+  category           Category       @relation(fields: [categoryId], references: [id])
+  images             ProductImage[]
+  inventory          Inventory[]
+  orderItems         OrderItem[]
+  returnItems        ReturnItem[]   @relation("ReturnProduct")
+  exchangeReturnItems ReturnItem[]  @relation("ExchangeProduct")
   
   @@map("products")
   @@index([categoryId])
@@ -261,8 +265,9 @@ model OrderItem {
   note       String?         @db.Text
   
   // Relations
-  order   Order   @relation(fields: [orderId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  order       Order        @relation(fields: [orderId], references: [id])
+  product     Product      @relation(fields: [productId], references: [id])
+  returnItems ReturnItem[]
   
   @@map("order_items")
   @@index([orderId])
@@ -413,24 +418,89 @@ enum PaymentStatusEnum {
 // ============================================
 
 model ReturnRequest {
-  id               String        @id @default(uuid())
-  orderId          String        @map("order_id")
-  type             ReturnType
-  status           ReturnStatus
-  channel          ReturnChannel
-  warrantyExpiredAt DateTime?    @map("warranty_expired_at") @db.Date
-  handledBy        String?       @map("handled_by")
-  reason           String        @db.Text
-  createdAt        DateTime      @default(now()) @map("created_at")
+  id                String        @id @default(uuid())
+  orderId           String        @map("order_id")
+  customerId        String        @map("customer_id")
+  type              ReturnType
+  status            ReturnStatus
+  channel           ReturnChannel
+  
+  // Thông tin yêu cầu
+  reason            String        @db.Text
+  description       String?       @db.Text
+  
+  // Xử lý
+  handledBy         String?       @map("handled_by")
+  approvedAt        DateTime?     @map("approved_at")
+  rejectedAt        DateTime?     @map("rejected_at")
+  rejectionReason   String?       @map("rejection_reason") @db.Text
+  completedAt       DateTime?     @map("completed_at")
+  
+  // Bảo hành
+  warrantyExpiredAt DateTime?     @map("warranty_expired_at") @db.Date
+  
+  // Hoàn tiền (RETURN)
+  refundAmount      Decimal?      @map("refund_amount") @db.Decimal(10, 2)
+  refundMethod      RefundMethod? @map("refund_method")
+  refundedAt        DateTime?     @map("refunded_at")
+  
+  // Đổi hàng (EXCHANGE)
+  priceDifference   Decimal?      @map("price_difference") @db.Decimal(10, 2)
+  
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
   
   // Relations
-  order   Order @relation(fields: [orderId], references: [id])
-  handler User? @relation(fields: [handledBy], references: [id])
+  order      Order                 @relation(fields: [orderId], references: [id])
+  customer   User                  @relation("CustomerReturnRequests", fields: [customerId], references: [id])
+  handler    User?                 @relation("HandlerReturnRequests", fields: [handledBy], references: [id])
+  items      ReturnItem[]
+  images     ReturnRequestImage[]
   
   @@map("return_requests")
   @@index([orderId])
+  @@index([customerId])
   @@index([handledBy])
   @@index([status])
+  @@index([type])
+}
+
+model ReturnItem {
+  id                String           @id @default(uuid())
+  returnRequestId   String           @map("return_request_id")
+  orderItemId       String           @map("order_item_id")
+  productId         String           @map("product_id")
+  quantity          Int
+  condition         ProductCondition
+  exchangeProductId String?          @map("exchange_product_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  
+  // Relations
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id])
+  product         Product       @relation("ReturnProduct", fields: [productId], references: [id])
+  exchangeProduct Product?      @relation("ExchangeProduct", fields: [exchangeProductId], references: [id])
+  
+  @@map("return_items")
+  @@index([returnRequestId])
+  @@index([orderItemId])
+}
+
+model ReturnRequestImage {
+  id              String          @id @default(uuid())
+  returnRequestId String          @map("return_request_id")
+  imageUrl        String          @map("image_url") @db.VarChar(255)
+  imageType       ReturnImageType @map("image_type")
+  uploadedBy      String          @map("uploaded_by")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  returnRequest ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  uploader      User          @relation("ReturnImageUploader", fields: [uploadedBy], references: [id])
+  
+  @@map("return_request_images")
+  @@index([returnRequestId])
+  @@index([uploadedBy])
 }
 
 enum ReturnType {
@@ -440,12 +510,33 @@ enum ReturnType {
 }
 
 enum ReturnStatus {
-  OPEN
+  PENDING
   APPROVED
-  COMPLETED
   REJECTED
+  COMPLETED
 }
 
 enum ReturnChannel {
   IN_STORE
+}
+
+enum RefundMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum ProductCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  DAMAGED
+  DEFECTIVE
+}
+
+enum ReturnImageType {
+  CUSTOMER_PRODUCT
+  CUSTOMER_DEFECT
+  STAFF_RECEIVED
+  STAFF_INSPECTION
+  OTHER
 }
