@@ -81,7 +81,7 @@ router.get(
 router.get(
     '/stats',
     authMiddleware,
-    roleMiddleware([ROLES.ADMIN, ROLES.MANAGER]),
+    roleMiddleware([ROLES.ADMIN, ROLES.OPERATION]),
     ordersController.getStats.bind(ordersController)
 );
 
