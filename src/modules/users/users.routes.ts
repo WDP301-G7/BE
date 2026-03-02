@@ -42,7 +42,7 @@ router.use(authMiddleware);
  */
 router.get(
   '/stats',
-  roleMiddleware([ROLES.ADMIN, ROLES.MANAGER]),
+  roleMiddleware([ROLES.ADMIN, ROLES.OPERATION]),
   usersController.getUsersStats.bind(usersController)
 );
 
@@ -91,7 +91,7 @@ router.get(
  */
 router.get(
   '/',
-  roleMiddleware([ROLES.ADMIN, ROLES.MANAGER]),
+  roleMiddleware([ROLES.ADMIN, ROLES.OPERATION]),
   validate(getUsersQuerySchema),
   usersController.getUsers.bind(usersController)
 );
