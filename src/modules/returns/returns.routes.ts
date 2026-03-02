@@ -142,7 +142,7 @@ router.get(
 );
 
 // ============================================
-// OPERATION/ADMIN ROUTES
+// STAFF/OPERATION/ADMIN ROUTES
 // ============================================
 
 /**
@@ -189,7 +189,7 @@ router.get(
 router.get(
     '/',
     authMiddleware,
-    roleMiddleware([ROLES.OPERATION, ROLES.ADMIN]),
+    roleMiddleware([ROLES.STAFF, ROLES.OPERATION, ROLES.ADMIN]),
     validate(getReturnsQuerySchema),
     returnsController.getAllReturns.bind(returnsController)
 );
