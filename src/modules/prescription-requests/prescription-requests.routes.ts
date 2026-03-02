@@ -25,7 +25,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/prescription-requests:
+ * /prescription-requests:
  *   post:
  *     summary: Create new prescription request
  *     description: Customer uploads 1-3 prescription images and creates a consultation request
@@ -86,7 +86,7 @@ router.post(
 
 /**
  * @swagger
- * /api/prescription-requests:
+ * /prescription-requests:
  *   get:
  *     summary: Get prescription requests with filters
  *     description: Operation/Admin can view and filter prescription requests
@@ -148,7 +148,7 @@ router.get(
 
 /**
  * @swagger
- * /api/prescription-requests/{id}:
+ * /prescription-requests/{id}:
  *   get:
  *     summary: Get prescription request by ID
  *     description: Get detailed information about a specific prescription request
@@ -179,7 +179,7 @@ router.get(
 
 /**
  * @swagger
- * /api/prescription-requests/{id}/contact:
+ * /prescription-requests/{id}/contact:
  *   patch:
  *     summary: Update contact status
  *     description: Operation updates the contact status after calling customer
@@ -233,7 +233,7 @@ router.patch(
 
 /**
  * @swagger
- * /api/prescription-requests/{id}/create-order:
+ * /prescription-requests/{id}/create-order:
  *   post:
  *     summary: Create order from prescription request
  *     description: Operation creates a quotation order from the prescription request
@@ -333,7 +333,7 @@ router.post(
 
 /**
  * @swagger
- * /api/prescription-requests/{id}/schedule:
+ * /prescription-requests/{id}/schedule:
  *   patch:
  *     summary: Schedule in-store appointment
  *     description: Schedule an appointment for customer to visit store
@@ -386,7 +386,7 @@ router.patch(
 
 /**
  * @swagger
- * /api/prescription-requests/{id}/close:
+ * /prescription-requests/{id}/close:
  *   patch:
  *     summary: Close prescription request
  *     description: Mark request as lost or rejected
