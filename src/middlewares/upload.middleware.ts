@@ -86,5 +86,14 @@ export const uploadReturnImages = multer({
   },
 });
 
+// Create multer upload instance for review images (max 3 images)
+export const uploadReviewImages = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+  },
+}).array('images', 3);
+
 // Export as 'upload' for convenience
 export const upload = uploadReturnImages;

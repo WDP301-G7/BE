@@ -42,6 +42,8 @@ model User {
   returnImageUploads             ReturnRequestImage[]   @relation("ReturnImageUploader")
   prescriptionRequestsAsCustomer PrescriptionRequest[]  @relation("CustomerPrescriptionRequests")
   prescriptionRequestsAsHandler  PrescriptionRequest[]  @relation("HandlerPrescriptionRequests")
+  reviewsAsCustomer              Review[]               @relation("CustomerReviews")
+  reviewReplies                  Review[]               @relation("ReviewReplier")
   
   @@map("users")
   @@index([storeId])
@@ -126,6 +128,7 @@ model Product {
   orderItems         OrderItem[]
   returnItems        ReturnItem[]   @relation("ReturnProduct")
   exchangeReturnItems ReturnItem[]  @relation("ExchangeProduct")
+  reviews            Review[]
   
   @@map("products")
   @@index([categoryId])
@@ -219,6 +222,7 @@ model Order {
   prescriptionRequest PrescriptionRequest?
   payments            Payment[]
   returnRequests      ReturnRequest[]
+  reviews             Review[]
   
   @@map("orders")
   @@index([customerId])
@@ -268,6 +272,7 @@ model OrderItem {
   order       Order        @relation(fields: [orderId], references: [id])
   product     Product      @relation(fields: [productId], references: [id])
   returnItems ReturnItem[]
+  review      Review?
   
   @@map("order_items")
   @@index([orderId])
@@ -539,4 +544,64 @@ enum ReturnImageType {
   STAFF_RECEIVED
   STAFF_INSPECTION
   OTHER
+}
+
+// ============================================
+// REVIEWS
+// ============================================
+
+model Review {
+  id          String       @id @default(uuid())
+  orderItemId String       @unique @map("order_item_id")
+  orderId     String       @map("order_id")
+  productId   String       @map("product_id")
+  customerId  String       @map("customer_id")
+
+  rating        Int
+  comment       String?      @db.Text
+
+  status        ReviewStatus @default(PUBLISHED)
+  editableUntil DateTime     @map("editable_until")
+  deletedAt     DateTime?    @map("deleted_at")
+
+  replyContent  String?      @map("reply_content") @db.Text
+  repliedBy     String?      @map("replied_by")
+  repliedAt     DateTime?    @map("replied_at")
+
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  orderItem  OrderItem     @relation(fields: [orderItemId], references: [id])
+  order      Order         @relation(fields: [orderId], references: [id])
+  product    Product       @relation(fields: [productId], references: [id])
+  customer   User          @relation("CustomerReviews", fields: [customerId], references: [id])
+  replier    User?         @relation("ReviewReplier", fields: [repliedBy], references: [id])
+  images     ReviewImage[]
+
+  @@map("reviews")
+  @@index([productId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([status])
+  @@index([rating])
+  @@index([deletedAt])
+}
+
+model ReviewImage {
+  id        String   @id @default(uuid())
+  reviewId  String   @map("review_id")
+  imageUrl  String   @map("image_url") @db.VarChar(255)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_images")
+  @@index([reviewId])
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
 }
