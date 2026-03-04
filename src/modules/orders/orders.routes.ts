@@ -55,6 +55,14 @@ router.get(
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [WAITING_CUSTOMER, PROCESSING, READY, COMPLETED, CANCELLED]
+ *         description: Filter by order status. If omitted, returns WAITING_CUSTOMER, PROCESSING, READY.
  *     responses:
  *       200:
  *         description: Assigned orders retrieved successfully

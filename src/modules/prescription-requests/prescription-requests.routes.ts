@@ -141,7 +141,7 @@ router.post(
 router.get(
     '/',
     authMiddleware,
-    roleMiddleware(['OPERATION', 'ADMIN']),
+    roleMiddleware(['OPERATION', 'ADMIN', 'CUSTOMER']),
     validate(getPrescriptionRequestsQuerySchema),
     prescriptionRequestsController.getRequests
 );
@@ -174,8 +174,9 @@ router.get(
 router.get(
     '/:id',
     authMiddleware,
+    roleMiddleware(['OPERATION', 'ADMIN', 'CUSTOMER']),
     prescriptionRequestsController.getRequestById
-);
+);  
 
 /**
  * @swagger

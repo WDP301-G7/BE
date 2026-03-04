@@ -342,13 +342,13 @@ class OrdersRepository {
     /**
      * Find orders assigned to staff
      */
-    async findByStaffId(staffId: string): Promise<OrderWithRelations[]> {
+    async findByStaffId(staffId: string, status?: OrderStatus): Promise<OrderWithRelations[]> {
         return await prisma.order.findMany({
             where: {
                 handledBy: staffId,
-                status: {
-                    in: ['WAITING_CUSTOMER', 'PROCESSING', 'READY'] as OrderStatus[],
-                },
+                status: status
+                    ? status
+                    : { in: ['WAITING_CUSTOMER', 'PROCESSING', 'READY'] as OrderStatus[] },
             },
             include: {
                 customer: {

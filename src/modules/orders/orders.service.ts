@@ -455,8 +455,8 @@ class OrdersService {
     /**
      * Get orders assigned to staff
      */
-    async getAssignedOrders(staffId: string): Promise<OrderWithRelations[]> {
-        return await ordersRepository.findByStaffId(staffId);
+    async getAssignedOrders(staffId: string, status?: OrderStatus): Promise<OrderWithRelations[]> {
+        return await ordersRepository.findByStaffId(staffId, status);
     }
 
     /**
@@ -736,7 +736,7 @@ class OrdersService {
                 where: { id: orderId },
                 data: {
                     paymentStatus: 'PAID',
-                    status: order.status === 'WAITING_CUSTOMER' ? 'CONFIRMED' : order.status,
+                    status: order.status === 'WAITING_CUSTOMER' || order.status === 'NEW' ? 'CONFIRMED' : order.status,
                 },
             });
 

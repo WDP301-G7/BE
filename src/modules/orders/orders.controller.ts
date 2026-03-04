@@ -145,8 +145,9 @@ class OrdersController {
     async getAssignedOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
             const staffId = req.user!.userId;
+            const { status } = req.query as { status?: string };
 
-            const orders = await ordersService.getAssignedOrders(staffId);
+            const orders = await ordersService.getAssignedOrders(staffId, status as any);
 
             res.status(200).json(apiResponse.success(orders, 'Assigned orders retrieved successfully'));
         } catch (error) {
