@@ -177,8 +177,8 @@ class ReturnsService {
             throw new BadRequestError('Chỉ đơn hàng đã hoàn thành mới được đổi/trả');
         }
 
-        // 4. Check order type (không cho đổi/trả đơn PRESCRIPTION)
-        if (order.orderType === 'PRESCRIPTION') {
+        // 4. Check order type (không cho đổi/trả đơn PRESCRIPTION, nhưng CHO PHÉP bảo hành)
+        if (order.orderType === 'PRESCRIPTION' && type !== 'WARRANTY') {
             throw new BadRequestError('Không thể đổi/trả kính theo toa');
         }
 
