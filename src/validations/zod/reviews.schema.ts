@@ -9,11 +9,14 @@ import { ReviewStatus } from '@prisma/client';
 export const createReviewSchema = z.object({
     body: z.object({
         orderItemId: z.string().uuid('Invalid orderItem ID format'),
-        rating: z
-            .number({ required_error: 'Rating là bắt buộc' })
-            .int('Rating phải là số nguyên')
-            .min(1, 'Rating tối thiểu là 1')
-            .max(5, 'Rating tối đa là 5'),
+        rating: z.preprocess(
+            (val) => (typeof val === 'string' ? parseInt(val, 10) : val),
+            z
+                .number({ required_error: 'Rating là bắt buộc' })
+                .int('Rating phải là số nguyên')
+                .min(1, 'Rating tối thiểu là 1')
+                .max(5, 'Rating tối đa là 5')
+        ),
         comment: z
             .string()
             .max(1000, 'Comment không được vượt quá 1000 ký tự')
@@ -30,12 +33,15 @@ export const updateReviewSchema = z.object({
     }),
     body: z
         .object({
-            rating: z
-                .number()
-                .int('Rating phải là số nguyên')
-                .min(1, 'Rating tối thiểu là 1')
-                .max(5, 'Rating tối đa là 5')
-                .optional(),
+            rating: z.preprocess(
+                (val) => (typeof val === 'string' ? parseInt(val, 10) : val),
+                z
+                    .number()
+                    .int('Rating phải là số nguyên')
+                    .min(1, 'Rating tối thiểu là 1')
+                    .max(5, 'Rating tối đa là 5')
+                    .optional()
+            ),
             comment: z
                 .string()
                 .max(1000, 'Comment không được vượt quá 1000 ký tự')
