@@ -67,6 +67,7 @@ import paymentsRoutes from './modules/payments/payments.routes';
 import prescriptionRequestsRoutes from './modules/prescription-requests/prescription-requests.routes';
 import returnsRoutes from './modules/returns/returns.routes';
 import reviewsRoutes, { productReviewsRouter } from './modules/reviews/reviews.routes';
+import membershipRoutes from './modules/membership/membership.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
@@ -81,6 +82,7 @@ app.use(`${ENV.API_PREFIX}/prescription-requests`, prescriptionRequestsRoutes);
 app.use(`${ENV.API_PREFIX}/returns`, returnsRoutes);
 app.use(`${ENV.API_PREFIX}/reviews`, reviewsRoutes);
 app.use(`${ENV.API_PREFIX}/products/:productId/reviews`, productReviewsRouter);
+app.use(`${ENV.API_PREFIX}/membership`, membershipRoutes);
 
 // 404 handler
 app.use((req, res) => {

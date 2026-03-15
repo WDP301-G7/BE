@@ -473,6 +473,7 @@ class ReturnsRepository {
         id: string,
         data: {
             handledBy: string;
+            finalAmount?: number;
             refundAmount?: number;
             refundMethod?: string;
             priceDifference?: number;
@@ -484,6 +485,7 @@ class ReturnsRepository {
                 status: 'COMPLETED',
                 handledBy: data.handledBy,
                 completedAt: new Date(),
+                finalAmount: data.finalAmount,
                 refundAmount: data.refundAmount,
                 refundMethod: data.refundMethod as any,
                 refundedAt: data.refundAmount ? new Date() : null,

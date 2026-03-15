@@ -17,6 +17,7 @@ import {
 } from '../../utils/errorHandler';
 import { prisma } from '../../config/database';
 import { CreateOrderInput, ConfirmOrderInput } from '../../validations/zod/orders.schema';
+import { membershipService } from '../membership/membership.service';
 
 /**
  * Allowed status transitions
@@ -72,16 +73,24 @@ class OrdersService {
         }
 
         // Step 4: Calculate total amount
-        const totalAmount = data.items.reduce((sum, item) => {
+        const baseAmount = data.items.reduce((sum, item) => {
             const product = productsMap.get(item.productId);
             return sum + Number(product.price) * item.quantity;
         }, 0);
+
+        // Step 4b: Apply membership discount
+        const membershipTier = await membershipService.getUserTier(customerId);
+        const discountPercent = membershipTier ? Number(membershipTier.discountPercent) : 0;
+        const discountAmount = Math.round(baseAmount * discountPercent / 100);
+        const totalAmount = baseAmount - discountAmount;
 
         // Step 5: Create order in database
         const orderData: CreateOrderData = {
             customerId,
             orderType: 'IN_STOCK',
             totalAmount,
+            discountAmount,
+            membershipTierId: membershipTier?.id,
             items: data.items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
@@ -354,9 +363,9 @@ class OrdersService {
 
         // Transaction: Execute all updates atomically
         try {
-            return await prisma.$transaction(async (tx) => {
+            const completedOrder = await prisma.$transaction(async (tx) => {
                 // 1. Update order status
-                const completedOrder = await tx.order.update({
+                const updated = await tx.order.update({
                     where: { id: orderId },
                     data: { status: 'COMPLETED' },
                 });
@@ -372,11 +381,20 @@ class OrdersService {
                     data: { itemStatus: 'DELIVERED' },
                 });
 
-                return completedOrder;
+                return updated;
             }, {
                 maxWait: 5000,
                 timeout: 15000 // Increased timeout
             });
+
+            // 4. Update membership spend (outside transaction — non-critical)
+            try {
+                await membershipService.recordSpend(order.customerId, Number(order.totalAmount));
+            } catch (membershipError) {
+                console.error('Membership recordSpend error (non-critical):', membershipError);
+            }
+
+            return completedOrder;
         } catch (error: any) {
             console.error('Complete Order DB Error:', error);
             if (error instanceof AppError) throw error; // Rethrow operational errors
@@ -611,9 +629,9 @@ class OrdersService {
 
         // Execute transaction
         try {
-            return await prisma.$transaction(async (tx) => {
+            const completedOrder = await prisma.$transaction(async (tx) => {
                 // Update order status with completion note
-                const completedOrder = await tx.order.update({
+                const updated = await tx.order.update({
                     where: { id: orderId },
                     data: {
                         status: 'COMPLETED',
@@ -635,11 +653,20 @@ class OrdersService {
                     data: { itemStatus: 'DELIVERED' },
                 });
 
-                return completedOrder;
+                return updated;
             }, {
                 maxWait: 5000,
                 timeout: 15000,
             });
+
+            // Update membership spend (outside transaction — non-critical)
+            try {
+                await membershipService.recordSpend(order.customerId, Number(order.totalAmount));
+            } catch (membershipError) {
+                console.error('Membership recordSpend error (non-critical):', membershipError);
+            }
+
+            return completedOrder;
         } catch (error: any) {
             console.error('Complete Order DB Error:', error);
             if (error instanceof AppError) throw error;

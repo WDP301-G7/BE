@@ -86,6 +86,7 @@ export const completeReturnSchema = z.object({
         id: z.string().uuid('Invalid return request ID'),
     }),
     body: z.object({
+        finalAmount: z.coerce.number().min(0, 'Giá cuối cùng phải >= 0').optional(),
         refundAmount: z.coerce.number().min(0, 'Số tiền hoàn phải >= 0').optional(),
         refundMethod: z.enum(['CASH', 'BANK_TRANSFER'], {
             errorMap: () => ({ message: 'Invalid refund method' }),
