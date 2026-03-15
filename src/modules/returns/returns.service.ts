@@ -16,13 +16,14 @@ import {
 } from '../../utils/errorHandler';
 import { prisma } from '../../config/database';
 import { uploadToSupabase, deleteFromSupabase, extractPathFromUrl, validateImageFile } from '../../utils/upload';
+import { membershipService } from '../membership/membership.service';
 
 /**
- * Business rules constants
+ * Default business rules (used as fallback when customer has no membership tier)
  */
-const RETURN_DEADLINE_DAYS = 7;
-const EXCHANGE_DEADLINE_DAYS = 15;
-const WARRANTY_MONTHS = 6;
+const DEFAULT_RETURN_DAYS = 7;
+const DEFAULT_EXCHANGE_DAYS = 15;
+const DEFAULT_WARRANTY_MONTHS = 6;
 
 const IMAGE_RULES = {
     CUSTOMER: {
@@ -93,8 +94,10 @@ class ReturnsService {
         if (data.type === 'WARRANTY') {
             const order = await ordersRepository.findById(data.orderId);
             if (order) {
+                const tier = await membershipService.getUserTier(customerId);
+                const warrantyMonths = tier?.warrantyMonths ?? DEFAULT_WARRANTY_MONTHS;
                 warrantyExpiredAt = new Date(order.updatedAt);
-                warrantyExpiredAt.setMonth(warrantyExpiredAt.getMonth() + WARRANTY_MONTHS);
+                warrantyExpiredAt.setMonth(warrantyExpiredAt.getMonth() + warrantyMonths);
             }
         }
 
@@ -182,24 +185,30 @@ class ReturnsService {
             throw new BadRequestError('Không thể đổi/trả kính theo toa');
         }
 
-        // 5. Check time limits
+        // 5. Get dynamic limits from customer's membership tier
+        const tier = await membershipService.getUserTier(customerId);
+        const returnDays = tier?.returnDays ?? DEFAULT_RETURN_DAYS;
+        const exchangeDays = tier?.exchangeDays ?? DEFAULT_EXCHANGE_DAYS;
+        const warrantyMonths = tier?.warrantyMonths ?? DEFAULT_WARRANTY_MONTHS;
+
+        // 6. Check time limits
         const completedDate = order.updatedAt;
         const now = new Date();
         const daysPassed = Math.floor((now.getTime() - completedDate.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (type === 'RETURN' && daysPassed > RETURN_DEADLINE_DAYS) {
-            throw new BadRequestError(`Đã quá thời hạn trả hàng (${RETURN_DEADLINE_DAYS} ngày)`);
+        if (type === 'RETURN' && daysPassed > returnDays) {
+            throw new BadRequestError(`Đã quá thời hạn trả hàng (${returnDays} ngày)`);
         }
 
-        if (type === 'EXCHANGE' && daysPassed > EXCHANGE_DEADLINE_DAYS) {
-            throw new BadRequestError(`Đã quá thời hạn đổi hàng (${EXCHANGE_DEADLINE_DAYS} ngày)`);
+        if (type === 'EXCHANGE' && daysPassed > exchangeDays) {
+            throw new BadRequestError(`Đã quá thời hạn đổi hàng (${exchangeDays} ngày)`);
         }
 
         if (type === 'WARRANTY') {
             const warrantyExpired = new Date(completedDate);
-            warrantyExpired.setMonth(warrantyExpired.getMonth() + WARRANTY_MONTHS);
+            warrantyExpired.setMonth(warrantyExpired.getMonth() + warrantyMonths);
             if (now > warrantyExpired) {
-                throw new BadRequestError(`Đã hết hạn bảo hành (${WARRANTY_MONTHS} tháng)`);
+                throw new BadRequestError(`Đã hết hạn bảo hành (${warrantyMonths} tháng)`);
             }
         }
 
@@ -389,6 +398,7 @@ class ReturnsService {
         returnId: string,
         staffId: string,
         data: {
+            finalAmount?: number;
             refundAmount?: number;
             refundMethod?: string;
             completionNote?: string;
@@ -429,6 +439,7 @@ class ReturnsService {
                     status: 'COMPLETED',
                     handledBy: staffId,
                     completedAt: new Date(),
+                    finalAmount: data.finalAmount,
                     refundAmount: data.refundAmount,
                     refundMethod: data.refundMethod as any,
                     refundedAt: data.refundAmount ? new Date() : null,

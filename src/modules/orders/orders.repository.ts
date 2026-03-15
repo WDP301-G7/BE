@@ -6,6 +6,8 @@ export interface CreateOrderData {
     customerId: string;
     orderType: OrderType;
     totalAmount: number;
+    discountAmount?: number;
+    membershipTierId?: string;
     items: Array<{
         productId: string;
         quantity: number;
@@ -74,6 +76,8 @@ class OrdersRepository {
                     status: 'NEW',
                     paymentStatus: 'UNPAID',
                     totalAmount: data.totalAmount,
+                    discountAmount: data.discountAmount ?? 0,
+                    membershipTierId: data.membershipTierId ?? null,
                 },
             });
 
