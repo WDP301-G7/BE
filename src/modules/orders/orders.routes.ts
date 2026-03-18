@@ -401,7 +401,7 @@ router.post(
 router.post(
     '/:id/complete',
     authMiddleware,
-    roleMiddleware([ROLES.STAFF]),
+    roleMiddleware([ROLES.STAFF, ROLES.CUSTOMER]),
     validate(orderIdSchema),
     ordersController.completeOrder.bind(ordersController)
 );
