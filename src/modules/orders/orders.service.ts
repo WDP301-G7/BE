@@ -56,13 +56,21 @@ class OrdersService {
             productsMap.set(item.productId, product);
         }
 
-        // Step 3: Check stock availability (across all stores)
-        // For IN_STOCK orders, we need to ensure products are available
+        // Step 3: Check stock availability & Identify Pre-order
+        let isPreorder = false;
+        let maxLeadTime = 0;
+
         for (const item of data.items) {
             const product = productsMap.get(item.productId);
 
             // Skip SERVICE products (no inventory)
             if (product.type === 'SERVICE') continue;
+
+            if (product.isPreorder) {
+                isPreorder = true;
+                maxLeadTime = Math.max(maxLeadTime, product.leadTimeDays || 0);
+                continue; // Skip stock check for pre-order items
+            }
 
             const availableQty = await inventoryRepository.getTotalAvailableQuantity(item.productId);
             if (availableQty < item.quantity) {
@@ -72,25 +80,33 @@ class OrdersService {
             }
         }
 
-        // Step 4: Calculate total amount
+        // Step 4: Calculate expected ready date for pre-orders
+        let expectedReadyDate: Date | undefined;
+        if (isPreorder && maxLeadTime > 0) {
+            expectedReadyDate = new Date();
+            expectedReadyDate.setDate(expectedReadyDate.getDate() + maxLeadTime);
+        }
+
+        // Step 5: Calculate total amount
         const baseAmount = data.items.reduce((sum, item) => {
             const product = productsMap.get(item.productId);
             return sum + Number(product.price) * item.quantity;
         }, 0);
 
-        // Step 4b: Apply membership discount
+        // Step 5b: Apply membership discount
         const membershipTier = await membershipService.getUserTier(customerId);
         const discountPercent = membershipTier ? Number(membershipTier.discountPercent) : 0;
         const discountAmount = Math.round(baseAmount * discountPercent / 100);
         const totalAmount = baseAmount - discountAmount;
 
-        // Step 5: Create order in database
+        // Step 6: Create order in database
         const orderData: CreateOrderData = {
             customerId,
-            orderType: 'IN_STOCK',
+            orderType: isPreorder ? 'PRE_ORDER' : 'IN_STOCK',
             totalAmount,
             discountAmount,
             membershipTierId: membershipTier?.id,
+            expectedReadyDate,
             items: data.items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
@@ -739,10 +755,9 @@ class OrdersService {
     }
 
     /**
-     * Handle payment success for prescription orders
-     * - Update order status: WAITING_CUSTOMER → CONFIRMED
-     * - Update payment status: UNPAID → PAID
-     * - Update prescription request status: QUOTED → ACCEPTED
+     * Handle payment success (called by payment service)
+     * - Update order status to CONFIRMED
+     * - Update prescription request status if applicable
      */
     async handlePaymentSuccess(orderId: string): Promise<Order> {
         const order = await prisma.order.findUnique({
@@ -756,19 +771,25 @@ class OrdersService {
             throw new NotFoundError('Order not found');
         }
 
-        // Update order and prescription request in transaction
+        // Avoid unnecessary updates if already processed
+        if (order.paymentStatus === 'PAID' && order.status === 'CONFIRMED') {
+            return order;
+        }
+
         return await prisma.$transaction(async (tx) => {
-            // Update order
+            // 1. Update order
             const updatedOrder = await tx.order.update({
                 where: { id: orderId },
                 data: {
                     paymentStatus: 'PAID',
-                    status: order.status === 'WAITING_CUSTOMER' || order.status === 'NEW' ? 'CONFIRMED' : order.status,
+                    status: (order.status === 'WAITING_CUSTOMER' || order.status === 'NEW') 
+                        ? 'CONFIRMED' 
+                        : order.status,
                 },
             });
 
-            // Update prescription request if exists
-            if (order.prescriptionRequest) {
+            // 2. Update prescription request if exists
+            if (order.prescriptionRequest && order.prescriptionRequest.status === 'QUOTED') {
                 await tx.prescriptionRequest.update({
                     where: { id: order.prescriptionRequest.id },
                     data: {

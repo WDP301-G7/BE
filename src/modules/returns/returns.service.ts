@@ -1,5 +1,5 @@
 // src/modules/returns/returns.service.ts
-import { ReturnRequest, ReturnStatus, ReturnType } from '@prisma/client';
+import { ReturnRequest, ReturnStatus, ReturnType, Prisma } from '@prisma/client';
 import {
     returnsRepository,
     GetReturnsFilter,
@@ -472,45 +472,52 @@ class ReturnsService {
      */
     private async updateInventoryForReturn(
         returnRequest: ReturnRequestWithRelations,
-        tx: any
+        tx: Prisma.TransactionClient
     ): Promise<void> {
         for (const item of returnRequest.items) {
             // Skip SERVICE products
             if (item.product.type === 'SERVICE') continue;
 
-            // Only add back to inventory if condition is good
-            if (item.condition === 'NEW' || item.condition === 'LIKE_NEW' || item.condition === 'GOOD') {
-                // Find inventory to add back
-                const inventories = await tx.inventory.findMany({
-                    where: { productId: item.productId },
-                    orderBy: { quantity: 'desc' },
+            // 1. Add back to inventory if condition is good
+            if (['NEW', 'LIKE_NEW', 'GOOD'].includes(item.condition)) {
+                // Find any inventory record for this product to add back
+                const existingInv = await tx.inventory.findFirst({
+                    where: { productId: item.productId }
                 });
 
-                if (inventories.length > 0) {
-                    // Add to first inventory
+                if (existingInv) {
                     await tx.inventory.update({
-                        where: { id: inventories[0].id },
-                        data: {
-                            quantity: { increment: item.quantity },
-                        },
+                        where: { id: existingInv.id },
+                        data: { quantity: { increment: item.quantity } }
                     });
                 }
             }
 
-            // If EXCHANGE, decrease new product inventory
+            // 2. If EXCHANGE, decrease new product inventory (atomic)
             if (returnRequest.type === 'EXCHANGE' && item.exchangeProductId) {
-                const newProductInventories = await tx.inventory.findMany({
+                const inventories = await tx.inventory.findMany({
                     where: { productId: item.exchangeProductId },
-                    orderBy: { quantity: 'desc' },
+                    orderBy: { quantity: 'desc' }
                 });
 
-                if (newProductInventories.length > 0) {
-                    await tx.inventory.update({
-                        where: { id: newProductInventories[0].id },
-                        data: {
-                            quantity: { decrement: item.quantity },
-                        },
-                    });
+                let remainingToDeduct = item.quantity;
+                for (const inv of inventories) {
+                    if (remainingToDeduct <= 0) break;
+
+                    const available = inv.quantity - inv.reservedQuantity;
+                    const toDeduct = Math.min(available, remainingToDeduct);
+
+                    if (toDeduct > 0) {
+                        await tx.inventory.update({
+                            where: { id: inv.id },
+                            data: { quantity: { decrement: toDeduct } }
+                        });
+                        remainingToDeduct -= toDeduct;
+                    }
+                }
+
+                if (remainingToDeduct > 0) {
+                    throw new BadRequestError(`Không đủ tồn kho cho sản phẩm đổi trả: ${item.exchangeProductId}`);
                 }
             }
         }
