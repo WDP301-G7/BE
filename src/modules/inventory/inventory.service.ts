@@ -155,23 +155,14 @@ class InventoryService {
    * Reserve inventory (for orders)
    */
   async reserveInventory(id: string, data: ReserveInventoryInput): Promise<Inventory> {
-    // Check if inventory exists
-    const inventory = await inventoryRepository.findById(id);
-
-    if (!inventory) {
-      throw new NotFoundError('Inventory not found');
+    try {
+      return await inventoryRepository.reserveWithCheck(id, data.quantity);
+    } catch (error: any) {
+      if (error.message === 'INSUFFICIENT_STOCK') {
+        throw new BadRequestError(`Not enough available quantity for this request.`);
+      }
+      throw error;
     }
-
-    // Check if there's enough available quantity
-    const availableQuantity = inventory.quantity - inventory.reservedQuantity;
-
-    if (availableQuantity < data.quantity) {
-      throw new BadRequestError(
-        `Not enough available quantity. Available: ${availableQuantity}, Requested: ${data.quantity}`
-      );
-    }
-
-    return await inventoryRepository.reserve(id, data.quantity);
   }
 
   /**

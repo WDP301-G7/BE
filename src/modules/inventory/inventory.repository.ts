@@ -258,6 +258,25 @@ class InventoryRepository {
   }
 
   /**
+   * Reserve inventory with availability check (atomic)
+   */
+  async reserveWithCheck(id: string, quantityToReserve: number): Promise<Inventory> {
+    // We use a raw update or a specific where clause to ensure atomicity
+    // Only update if current quantity - reservedQuantity >= quantityToReserve
+    return await prisma.$executeRaw`
+      UPDATE inventory 
+      SET reserved_quantity = reserved_quantity + ${quantityToReserve},
+          updated_at = NOW()
+      WHERE id = ${id} AND (quantity - reserved_quantity) >= ${quantityToReserve}
+    `.then(async (result) => {
+      if (result === 0) {
+        throw new Error('INSUFFICIENT_STOCK');
+      }
+      return await prisma.inventory.findUniqueOrThrow({ where: { id } });
+    });
+  }
+
+  /**
    * Get total available quantity for a product (across all stores)
    */
   async getTotalAvailableQuantity(productId: string): Promise<number> {

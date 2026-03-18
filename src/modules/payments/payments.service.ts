@@ -117,6 +117,18 @@ class PaymentsService {
             };
         }
 
+        // 4b. Verify amount matches (Security check)
+        if (amount !== Number(payment.amount)) {
+            return {
+                isValid: false,
+                orderId,
+                amount,
+                transactionId,
+                responseCode: '04', // Mismatch amount
+                message: 'Amount mismatch',
+            };
+        }
+
         // 5. Process payment based on response code
         if (responseCode === '00') {
             // Payment successful
@@ -183,6 +195,18 @@ class PaymentsService {
                 transactionId,
                 responseCode: '00',
                 message: 'Payment already processed',
+            };
+        }
+
+        // 4b. Verify amount matches (Security check)
+        if (amount !== Number(payment.amount)) {
+            return {
+                isValid: false,
+                orderId,
+                amount,
+                transactionId,
+                responseCode: '04',
+                message: 'Amount mismatch',
             };
         }
 

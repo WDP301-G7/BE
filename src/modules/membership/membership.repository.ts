@@ -91,6 +91,31 @@ class MembershipRepository {
         return prisma.user.update({ where: { id: userId }, data });
     }
 
+    /**
+     * Atomic update for user membership spend and tier
+     */
+    async updateMembershipAtomic(userId: string, updateData: {
+        amount: number;
+        spendInPeriod: number;
+        periodStartDate: Date;
+        membershipTierId: string | null;
+        tierUpdatedAt: Date;
+    }): Promise<any> {
+        return await prisma.user.update({
+            where: { id: userId },
+            data: {
+                totalSpent: { increment: updateData.amount },
+                spendInPeriod: updateData.spendInPeriod,
+                periodStartDate: updateData.periodStartDate,
+                membershipTierId: updateData.membershipTierId,
+                tierUpdatedAt: updateData.tierUpdatedAt,
+            },
+            include: {
+                membershipTier: true
+            }
+        });
+    }
+
     // ─── History ────────────────────────────────────────────────────────────────
 
     async createHistory(data: {

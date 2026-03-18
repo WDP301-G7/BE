@@ -13,6 +13,7 @@ export interface CreateOrderData {
         quantity: number;
         unitPrice: number;
     }>;
+    expectedReadyDate?: Date;
 }
 
 export interface GetOrdersFilter {
@@ -78,6 +79,7 @@ class OrdersRepository {
                     totalAmount: data.totalAmount,
                     discountAmount: data.discountAmount ?? 0,
                     membershipTierId: data.membershipTierId ?? null,
+                    expectedReadyDate: data.expectedReadyDate ?? null,
                 },
             });
 

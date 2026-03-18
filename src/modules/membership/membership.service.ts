@@ -113,13 +113,26 @@ class MembershipService {
     }
 
     // ─── Record spend & recalculate tier (called after order COMPLETED) ─────────
+    private tiersCache: MembershipTier[] | null = null;
+    private cacheTimestamp: number = 0;
+    private readonly CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+    private async getCachedTiers(): Promise<MembershipTier[]> {
+        const now = Date.now();
+        if (this.tiersCache && (now - this.cacheTimestamp < this.CACHE_TTL)) {
+            return this.tiersCache;
+        }
+        this.tiersCache = await membershipRepository.findAllTiersSorted();
+        this.cacheTimestamp = now;
+        return this.tiersCache;
+    }
 
     async recordSpend(userId: string, amount: number): Promise<void> {
         const user = await membershipRepository.findUserWithTier(userId);
         if (!user) return;
 
         const now = new Date();
-        const allTiers = await membershipRepository.findAllTiersSorted();
+        const allTiers = await this.getCachedTiers();
         if (allTiers.length === 0) return;
 
         // Determine current period state
@@ -144,15 +157,13 @@ class MembershipService {
             periodStartDate = user.periodStartDate!;
         }
 
-        const totalSpent = Number(user.totalSpent) + amount;
-
         // Calculate eligible tier: highest tier whose minSpend ≤ spendInPeriod
         const eligibleTiers = allTiers.filter((t) => Number(t.minSpend) <= spendInPeriod);
         const newTier = eligibleTiers.length > 0 ? eligibleTiers[eligibleTiers.length - 1] : null;
 
-        // Persist membership update
-        await membershipRepository.updateUserMembership(userId, {
-            totalSpent,
+        // Persist membership update atomically
+        const updatedUser = await membershipRepository.updateMembershipAtomic(userId, {
+            amount,
             spendInPeriod,
             periodStartDate,
             membershipTierId: newTier?.id ?? null,
@@ -161,7 +172,7 @@ class MembershipService {
 
         // Log tier change if tier actually changed
         const oldTierId = user.membershipTierId ?? null;
-        const newTierId = newTier?.id ?? null;
+        const newTierId = updatedUser.membershipTierId ?? null;
         if (oldTierId !== newTierId && newTierId !== null) {
             await membershipRepository.createHistory({
                 userId,
