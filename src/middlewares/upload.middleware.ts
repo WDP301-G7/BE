@@ -95,5 +95,23 @@ export const uploadReviewImages = multer({
   },
 }).array('images', 3);
 
+// Create multer upload instance for 3D models (.glb, .gltf)
+export const uploadModel3D = multer({
+  storage,
+  fileFilter: (_req, file, cb) => {
+    const allowedExtensions = ['.glb', '.gltf'];
+    const fileExt = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
+    
+    if (allowedExtensions.includes(fileExt)) {
+      cb(null, true);
+    } else {
+      cb(new AppError('Invalid file type. Only .glb and .gltf 3D models are allowed', 400) as any);
+    }
+  },
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+}).single('model3dFile');
+
 // Export as 'upload' for convenience
 export const upload = uploadReturnImages;

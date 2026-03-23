@@ -3,6 +3,7 @@ import { MembershipTier } from '@prisma/client';
 import { membershipRepository, PaginatedHistory, GetHistoryFilter } from './membership.repository';
 import { NotFoundError, BadRequestError } from '../../utils/errorHandler';
 import { CreateTierInput, UpdateTierInput } from '../../validations/zod/membership.schema';
+import { settingsService } from '../settings/settings.service';
 
 export interface MembershipStatus {
     tier: string | null;
@@ -95,13 +96,18 @@ class MembershipService {
             periodEndDate.setDate(periodEndDate.getDate() + currentTier.periodDays);
         }
 
+        // Fetch dynamic defaults for users with no tier
+        const defaultWarranty = await settingsService.get<number>('membership.default_warranty_months', 6);
+        const defaultReturn = await settingsService.get<number>('membership.default_return_days', 7);
+        const defaultExchange = await settingsService.get<number>('membership.default_exchange_days', 15);
+
         return {
             tier: currentTier?.name ?? null,
             tierId: currentTier?.id ?? null,
             discountPercent: currentTier ? Number(currentTier.discountPercent) : 0,
-            warrantyMonths: currentTier?.warrantyMonths ?? 6,
-            returnDays: currentTier?.returnDays ?? 7,
-            exchangeDays: currentTier?.exchangeDays ?? 15,
+            warrantyMonths: currentTier?.warrantyMonths ?? defaultWarranty,
+            returnDays: currentTier?.returnDays ?? defaultReturn,
+            exchangeDays: currentTier?.exchangeDays ?? defaultExchange,
             totalSpent: Number(user.totalSpent),
             spendInPeriod,
             periodStartDate: user.periodStartDate,
@@ -115,11 +121,11 @@ class MembershipService {
     // ─── Record spend & recalculate tier (called after order COMPLETED) ─────────
     private tiersCache: MembershipTier[] | null = null;
     private cacheTimestamp: number = 0;
-    private readonly CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
     private async getCachedTiers(): Promise<MembershipTier[]> {
+        const cacheTtl = await settingsService.get<number>('membership.cache_ttl_ms', 600000);
         const now = Date.now();
-        if (this.tiersCache && (now - this.cacheTimestamp < this.CACHE_TTL)) {
+        if (this.tiersCache && (now - this.cacheTimestamp < cacheTtl)) {
             return this.tiersCache;
         }
         this.tiersCache = await membershipRepository.findAllTiersSorted();
@@ -137,7 +143,8 @@ class MembershipService {
 
         // Determine current period state
         const currentTier = user.membershipTier;
-        const periodDays = currentTier?.periodDays ?? 365;
+        const defaultPeriodDays = await settingsService.get<number>('membership.default_period_days', 365);
+        const periodDays = currentTier?.periodDays ?? defaultPeriodDays;
 
         let spendInPeriod: number;
         let periodStartDate: Date;

@@ -209,6 +209,68 @@ class ProductsController {
       next(error);
     }
   }
+
+  /**
+   * @route   GET /api/products/:id/try-on
+   * @desc    Get virtual try-on info for a product
+   * @access  Public
+   */
+  async getTryOnInfo(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const productId = req.params.id as string;
+      const result = await productsService.getTryOnInfo(productId);
+
+      res.status(200).json(apiResponse.success(result, 'Try-on info retrieved successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @route   POST /api/products/:id/try-on
+   * @desc    Upload/Update 3D model for a product
+   * @access  Private (Admin, Staff)
+   */
+  async uploadModel3D(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const productId = req.params.id as string;
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json(apiResponse.error('3D model file (.glb or .gltf) is required', 400));
+        return;
+      }
+
+      const product = await productsService.uploadModel3D(productId, file);
+
+      res.status(200).json(apiResponse.success({
+        productId: product.id,
+        model3dUrl: product.model3dUrl,
+        model3dFormat: product.model3dFormat,
+        model3dSizeBytes: product.model3dSizeBytes,
+        model3dUpdatedAt: product.model3dUpdatedAt,
+      }, '3D model uploaded successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @route   DELETE /api/products/:id/try-on
+   * @desc    Delete 3D model from a product
+   * @access  Private (Admin, Staff)
+   */
+  async deleteModel3D(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const productId = req.params.id as string;
+
+      await productsService.deleteModel3D(productId);
+
+      res.status(200).json(apiResponse.success({ productId }, '3D model removed successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const productsController = new ProductsController();

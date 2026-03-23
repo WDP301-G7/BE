@@ -172,6 +172,36 @@ class InventoryRepository {
   }
 
   /**
+   * Get all inventories for a list of products
+   */
+  async findManyByProducts(productIds: string[]): Promise<InventoryWithRelations[]> {
+    return (await prisma.inventory.findMany({
+      where: { productId: { in: productIds } },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            type: true,
+            price: true,
+          },
+        },
+        store: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
+      orderBy: {
+        quantity: 'desc',
+      },
+    })) as InventoryWithRelations[];
+  }
+
+  /**
    * Get inventory for a specific store
    */
   async getByStore(storeId: string): Promise<InventoryWithRelations[]> {

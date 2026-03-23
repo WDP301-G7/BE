@@ -10,7 +10,8 @@ import { NotFoundError, ConflictError, BadRequestError } from '../../utils/error
 import { CreateProductInput, UpdateProductInput } from '../../validations/zod/products.schema';
 import { prisma } from '../../config/database';
 import { uploadToSupabase, validateImageFile } from '../../utils/upload';
-import { REQUIRED_PRODUCT_IMAGES_COUNT, IMAGE_TYPE_MAP } from '../../constants/products';
+import { IMAGE_TYPE_MAP } from '../../constants/products';
+import { settingsService } from '../settings/settings.service';
 
 class ProductsService {
   /**
@@ -66,19 +67,23 @@ class ProductsService {
       throw new BadRequestError('Lead time days is required for preorder products');
     }
 
-    // Validate exactly 5 images
-    if (files.length !== REQUIRED_PRODUCT_IMAGES_COUNT) {
-      throw new BadRequestError(`Exactly ${REQUIRED_PRODUCT_IMAGES_COUNT} images are required`);
+    // Fetch dynamic settings
+    const requiredImageCount = await settingsService.get<number>('product.image_count', 5);
+    const maxImageSizeMb = await settingsService.get<number>('product.max_image_size_mb', 5);
+
+    // Validate image count
+    if (files.length !== requiredImageCount) {
+      throw new BadRequestError(`Exactly ${requiredImageCount} images are required`);
     }
 
     // Validate primary index
-    if (primaryIndex < 0 || primaryIndex >= REQUIRED_PRODUCT_IMAGES_COUNT) {
-      throw new BadRequestError(`Primary index must be between 0 and ${REQUIRED_PRODUCT_IMAGES_COUNT - 1}`);
+    if (primaryIndex < 0 || primaryIndex >= requiredImageCount) {
+      throw new BadRequestError(`Primary index must be between 0 and ${requiredImageCount - 1}`);
     }
 
     // Validate image types array
-    if (imageTypes.length !== REQUIRED_PRODUCT_IMAGES_COUNT) {
-      throw new BadRequestError(`Exactly ${REQUIRED_PRODUCT_IMAGES_COUNT} image types are required`);
+    if (imageTypes.length !== requiredImageCount) {
+      throw new BadRequestError(`Exactly ${requiredImageCount} image types are required`);
     }
 
     // Validate each image type
@@ -94,7 +99,7 @@ class ProductsService {
     // Validate all image files
     files.forEach((file, index) => {
       try {
-        validateImageFile(file, 5); // 5MB max per image
+        validateImageFile(file, maxImageSizeMb);
       } catch (error: any) {
         throw new BadRequestError(`Image ${index + 1}: ${error.message}`);
       }
@@ -241,6 +246,79 @@ class ProductsService {
 
     // Soft delete
     await productsRepository.softDelete(id);
+  }
+
+  /**
+   * Get virtual try-on info for a product
+   */
+  async getTryOnInfo(id: string): Promise<{
+    productId: string;
+    hasTryOn: boolean;
+    model3dUrl: string | null;
+    model3dFormat: string | null;
+    model3dSizeBytes: number | null;
+  }> {
+    const product = await productsRepository.findById(id);
+
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
+
+    return {
+      productId: product.id,
+      hasTryOn: !!product.model3dUrl,
+      model3dUrl: product.model3dUrl,
+      model3dFormat: product.model3dFormat,
+      model3dSizeBytes: product.model3dSizeBytes,
+    };
+  }
+
+  /**
+   * Upload/Update 3D model for a product (Admin/Staff only)
+   */
+  async uploadModel3D(id: string, file: Express.Multer.File): Promise<Product> {
+    // Check if product exists
+    const product = await productsRepository.findById(id);
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
+
+    // Only FRAME type products support virtual try-on
+    if (product.type !== 'FRAME') {
+      throw new BadRequestError('Only products of type FRAME can have a 3D model');
+    }
+
+    // Upload to Supabase
+    const uploadResult = await uploadToSupabase(file, 'models');
+
+    // Update product with 3D model info
+    const updatedProduct = await productsRepository.update(id, {
+      model3dUrl: uploadResult.url,
+      model3dFormat: file.originalname.toLowerCase().endsWith('.glb') ? 'GLB' : 'GLTF',
+      model3dSizeBytes: file.size,
+      model3dUpdatedAt: new Date(),
+    });
+
+    return updatedProduct;
+  }
+
+  /**
+   * Delete 3D model from a product (Admin/Staff only)
+   */
+  async deleteModel3D(id: string): Promise<void> {
+    // Check if product exists
+    const product = await productsRepository.findById(id);
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
+
+    // Update product to remove 3D model info
+    await productsRepository.update(id, {
+      model3dUrl: null,
+      model3dFormat: null,
+      model3dSizeBytes: null,
+      model3dUpdatedAt: null,
+    });
   }
 
   /**

@@ -68,6 +68,7 @@ import prescriptionRequestsRoutes from './modules/prescription-requests/prescrip
 import returnsRoutes from './modules/returns/returns.routes';
 import reviewsRoutes, { productReviewsRouter } from './modules/reviews/reviews.routes';
 import membershipRoutes from './modules/membership/membership.routes';
+import settingsRoutes from './modules/settings/settings.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
@@ -83,6 +84,7 @@ app.use(`${ENV.API_PREFIX}/returns`, returnsRoutes);
 app.use(`${ENV.API_PREFIX}/reviews`, reviewsRoutes);
 app.use(`${ENV.API_PREFIX}/products/:productId/reviews`, productReviewsRouter);
 app.use(`${ENV.API_PREFIX}/membership`, membershipRoutes);
+app.use(`${ENV.API_PREFIX}/settings`, settingsRoutes);
 
 // 404 handler
 app.use((req, res) => {
