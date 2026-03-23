@@ -157,6 +157,37 @@ class ProductsRepository {
   }
 
   /**
+   * Get multiple products by IDs (soft delete aware)
+   */
+  async findManyByIds(ids: string[]): Promise<ProductWithRelations[]> {
+    return (await prisma.product.findMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        images: {
+          select: {
+            id: true,
+            imageUrl: true,
+            imageType: true,
+            isPrimary: true,
+          },
+          orderBy: {
+            isPrimary: 'desc',
+          },
+        },
+      },
+    })) as ProductWithRelations[];
+  }
+
+  /**
    * Find product by name and category (for unique validation)
    */
   async findByNameAndCategory(name: string, categoryId: string, excludeId?: string): Promise<Product | null> {

@@ -108,10 +108,6 @@ class AuthService {
       user: userWithoutPassword,
       tokens,
     };
-    return {
-      user: userWithoutPassword,
-      tokens,
-    };
   }
 
   /**

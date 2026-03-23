@@ -23,11 +23,10 @@ import {
     GetReviewsQuery,
 } from '../../validations/zod/reviews.schema';
 
+import { settingsService } from '../settings/settings.service';
+
 // ─── Business rules constants ─────────────────────────────────────────────────
 
-const REVIEW_DEADLINE_DAYS = 30;
-const REVIEW_EDITABLE_DAYS = 7;
-const MAX_REVIEW_IMAGES = 3;
 const REVIEW_IMAGE_FOLDER = 'reviews';
 const ALLOWED_PRODUCT_TYPES_FOR_REVIEW = ['FRAME', 'LENS'] as const;
 
@@ -49,10 +48,15 @@ class ReviewsService {
         data: CreateReviewInput,
         files?: Express.Multer.File[]
     ): Promise<ReviewWithRelations> {
+        // Fetch dynamic settings
+        const maxImages = await settingsService.get<number>('review.max_images', 3);
+        const deadlineDays = await settingsService.get<number>('review.deadline_days', 30);
+        const editableDays = await settingsService.get<number>('review.editable_days', 7);
+
         // Validate image count
-        if (files && files.length > MAX_REVIEW_IMAGES) {
+        if (files && files.length > maxImages) {
             throw new BadRequestError(
-                `Chỉ được upload tối đa ${MAX_REVIEW_IMAGES} ảnh cho một đánh giá`
+                `Chỉ được upload tối đa ${maxImages} ảnh cho một đánh giá`
             );
         }
 
@@ -89,11 +93,11 @@ class ReviewsService {
         // Check review deadline (30 days from order completion)
         const completedAt = orderItem.order.updatedAt;
         const deadline = new Date(completedAt);
-        deadline.setDate(deadline.getDate() + REVIEW_DEADLINE_DAYS);
+        deadline.setDate(deadline.getDate() + deadlineDays);
 
         if (new Date() > deadline) {
             throw new BadRequestError(
-                `Đã hết hạn đánh giá. Chỉ được đánh giá trong vòng ${REVIEW_DEADLINE_DAYS} ngày sau khi nhận hàng`
+                `Đã hết hạn đánh giá. Chỉ được đánh giá trong vòng ${deadlineDays} ngày sau khi nhận hàng`
             );
         }
 
@@ -114,7 +118,7 @@ class ReviewsService {
 
         // Calculate editableUntil
         const editableUntil = new Date();
-        editableUntil.setDate(editableUntil.getDate() + REVIEW_EDITABLE_DAYS);
+        editableUntil.setDate(editableUntil.getDate() + editableDays);
 
         return await reviewsRepository.create({
             orderItemId: data.orderItemId,
@@ -141,10 +145,14 @@ class ReviewsService {
         data: UpdateReviewInput,
         files?: Express.Multer.File[]
     ): Promise<ReviewWithRelations> {
+        // Fetch dynamic settings
+        const maxImages = await settingsService.get<number>('review.max_images', 3);
+        const editableDays = await settingsService.get<number>('review.editable_days', 7);
+
         // Validate image count
-        if (files && files.length > MAX_REVIEW_IMAGES) {
+        if (files && files.length > maxImages) {
             throw new BadRequestError(
-                `Chỉ được upload tối đa ${MAX_REVIEW_IMAGES} ảnh cho một đánh giá`
+                `Chỉ được upload tối đa ${maxImages} ảnh cho một đánh giá`
             );
         }
 
@@ -167,7 +175,7 @@ class ReviewsService {
         // Check edit window
         if (new Date() > review.editableUntil) {
             throw new BadRequestError(
-                `Đã hết hạn chỉnh sửa. Review chỉ có thể chỉnh sửa trong vòng ${REVIEW_EDITABLE_DAYS} ngày sau khi tạo`
+                `Đã hết hạn chỉnh sửa. Review chỉ có thể chỉnh sửa trong vòng ${editableDays} ngày sau khi tạo`
             );
         }
 

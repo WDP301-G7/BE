@@ -49,6 +49,8 @@ export const ROLE_PERMISSIONS = {
     'promotions:write',
     'promotions:delete',
     'reports:read',
+    'settings:read',
+    'settings:write',
   ],
   [ROLES.MANAGER]: [
     // Store management

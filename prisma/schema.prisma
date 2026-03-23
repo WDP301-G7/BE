@@ -19,7 +19,7 @@ datasource db {
 model MembershipTier {
   id              String   @id @default(uuid())
   name            String   @db.VarChar(50)
-  minSpend        Decimal  @map("min_spend") @db.Decimal(12, 2)
+  minSpend        Decimal  @map("min_spend") @db.Decimal(15, 2)
   discountPercent Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
   warrantyMonths  Int      @default(6) @map("warranty_months")
   returnDays      Int      @default(7) @map("return_days")
@@ -73,8 +73,8 @@ model User {
 
   // Membership fields
   membershipTierId String?   @map("membership_tier_id")
-  totalSpent       Decimal   @default(0) @map("total_spent") @db.Decimal(12, 2)
-  spendInPeriod    Decimal   @default(0) @map("spend_in_period") @db.Decimal(12, 2)
+  totalSpent       Decimal   @default(0) @map("total_spent") @db.Decimal(15, 2)
+  spendInPeriod    Decimal   @default(0) @map("spend_in_period") @db.Decimal(15, 2)
   periodStartDate  DateTime? @map("period_start_date")
   tierUpdatedAt    DateTime? @map("tier_updated_at")
 
@@ -165,14 +165,18 @@ model Product {
   name          String      @db.VarChar(150)
   description   String?     @db.Text
   type          ProductType
-  price         Decimal     @db.Decimal(10, 2)
+  price         Decimal     @db.Decimal(15, 2)
   isPreorder    Boolean     @default(false) @map("is_preorder")
   leadTimeDays  Int?        @map("lead_time_days")
   sku           String?     @db.VarChar(50)
-  brand         String?     @db.VarChar(100)
-  deletedAt     DateTime?   @map("deleted_at")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  brand               String?        @db.VarChar(100)
+  model3dUrl          String?        @map("model3d_url") @db.VarChar(2048)
+  model3dFormat       String?        @map("model3d_format") @db.VarChar(20)
+  model3dSizeBytes    Int?           @map("model3d_size_bytes")
+  model3dUpdatedAt    DateTime?      @map("model3d_updated_at")
+  deletedAt           DateTime?      @map("deleted_at")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
   
   // Relations
   category           Category       @relation(fields: [categoryId], references: [id])
@@ -184,9 +188,7 @@ model Product {
   reviews            Review[]
   
   @@map("products")
-  @@index([categoryId])
-  @@index([type])
-  @@index([deletedAt])
+  @@index([categoryId, type, deletedAt])
 }
 
 enum ProductType {
@@ -251,8 +253,8 @@ model Order {
   orderType         OrderType      @map("order_type")
   status            OrderStatus
   paymentStatus     PaymentStatus  @map("payment_status")
-  depositAmount     Decimal?       @map("deposit_amount") @db.Decimal(10, 2)
-  totalAmount       Decimal        @map("total_amount") @db.Decimal(10, 2)
+  depositAmount     Decimal?       @map("deposit_amount") @db.Decimal(15, 2)
+  totalAmount       Decimal        @map("total_amount") @db.Decimal(15, 2)
   expectedReadyDate DateTime?      @map("expected_ready_date")
   appointmentDate   DateTime?      @map("appointment_date")
   appointmentNote   String?        @map("appointment_note") @db.Text
@@ -264,7 +266,7 @@ model Order {
   quotedAt          DateTime?      @map("quoted_at")
 
   // Membership discount snapshot
-  discountAmount    Decimal        @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  discountAmount    Decimal        @default(0) @map("discount_amount") @db.Decimal(15, 2)
   membershipTierId  String?        @map("membership_tier_id")
 
   createdAt         DateTime       @default(now()) @map("created_at")
@@ -285,8 +287,7 @@ model Order {
   @@map("orders")
   @@index([customerId])
   @@index([handledBy])
-  @@index([status])
-  @@index([orderType])
+  @@index([orderType, status, paymentStatus])
 }
 
 enum OrderType {
@@ -322,7 +323,7 @@ model OrderItem {
   orderId    String          @map("order_id")
   productId  String          @map("product_id")
   quantity   Int
-  unitPrice  Decimal         @map("unit_price") @db.Decimal(10, 2)
+  unitPrice  Decimal         @map("unit_price") @db.Decimal(15, 2)
   itemStatus OrderItemStatus @map("item_status")
   note       String?         @db.Text
   
@@ -451,7 +452,7 @@ model Payment {
   id        String        @id @default(uuid())
   orderId   String        @map("order_id")
   method    PaymentMethod
-  amount    Decimal       @db.Decimal(10, 2)
+  amount    Decimal       @db.Decimal(15, 2)
   status    PaymentStatusEnum
   paidAt    DateTime?     @map("paid_at")
   
@@ -503,15 +504,15 @@ model ReturnRequest {
   warrantyExpiredAt DateTime?     @map("warranty_expired_at") @db.Date
   
   // Hoàn tiền (RETURN)
-  refundAmount      Decimal?      @map("refund_amount") @db.Decimal(10, 2)
+  refundAmount      Decimal?      @map("refund_amount") @db.Decimal(15, 2)
   refundMethod      RefundMethod? @map("refund_method")
   refundedAt        DateTime?     @map("refunded_at")
   
   // Đổi hàng (EXCHANGE)
-  priceDifference   Decimal?      @map("price_difference") @db.Decimal(10, 2)
+  priceDifference   Decimal?      @map("price_difference") @db.Decimal(15, 2)
   
   // Giá cuối cùng (nhân viên nhập sau khi trao đổi với khách)
-  finalAmount       Decimal?      @map("final_amount") @db.Decimal(10, 2)
+  finalAmount       Decimal?      @map("final_amount") @db.Decimal(15, 2)
   
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
@@ -665,4 +666,28 @@ model ReviewImage {
 enum ReviewStatus {
   PUBLISHED
   HIDDEN
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(100)
+  value       String   @db.Text
+  type        SettingType @default(STRING)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+  @@index([key])
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
 }

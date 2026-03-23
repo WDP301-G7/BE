@@ -4,7 +4,7 @@ import { productsController } from './products.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
 import { roleMiddleware } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
-import { uploadProductImages } from '../../middlewares/upload.middleware';
+import { uploadProductImages, uploadModel3D } from '../../middlewares/upload.middleware';
 import { ROLES } from '../../constants/roles';
 import {
   updateProductSchema,
@@ -403,6 +403,109 @@ router.put(
  *       404:
  *         description: Product not found
  */
+/**
+ * @swagger
+ * /products/{id}/try-on:
+ *   get:
+ *     summary: Get virtual try-on info for a product
+ *     tags: [Products]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Try-on info retrieved successfully
+ *       404:
+ *         description: Product not found
+ */
+router.get('/:id/try-on', validate(getProductSchema), productsController.getTryOnInfo.bind(productsController));
+
+/**
+ * @swagger
+ * /products/{id}/try-on:
+ *   post:
+ *     summary: Upload/Update 3D model for a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - model3dFile
+ *             properties:
+ *               model3dFile:
+ *                 type: string
+ *                 format: binary
+ *                 description: 3D model file (.glb or .gltf, max 50MB)
+ *     responses:
+ *       200:
+ *         description: 3D model uploaded successfully
+ *       400:
+ *         description: Invalid file type or product type
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Product not found
+ */
+router.post(
+  '/:id/try-on',
+  authMiddleware,
+  roleMiddleware([ROLES.ADMIN, ROLES.STAFF]),
+  validate(getProductSchema),
+  uploadModel3D,
+  productsController.uploadModel3D.bind(productsController)
+);
+
+/**
+ * @swagger
+ * /products/{id}/try-on:
+ *   delete:
+ *     summary: Delete 3D model from a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: 3D model removed successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Product not found
+ */
+router.delete(
+  '/:id/try-on',
+  authMiddleware,
+  roleMiddleware([ROLES.ADMIN, ROLES.STAFF]),
+  validate(getProductSchema),
+  productsController.deleteModel3D.bind(productsController)
+);
+
 router.delete(
   '/:id',
   authMiddleware,

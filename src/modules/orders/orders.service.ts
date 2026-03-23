@@ -7,17 +7,13 @@ import {
     PaginatedOrders,
     OrderWithRelations,
 } from './orders.repository';
-import { inventoryRepository } from '../inventory/inventory.repository';
+import { inventoryRepository, InventoryWithRelations } from '../inventory/inventory.repository';
 import { productsRepository } from '../products/products.repository';
-import {
-    NotFoundError,
-    BadRequestError,
-    ForbiddenError,
-    AppError,
-} from '../../utils/errorHandler';
+import { NotFoundError, BadRequestError, ForbiddenError, AppError } from '../../utils/errorHandler';
 import { prisma } from '../../config/database';
 import { CreateOrderInput, ConfirmOrderInput } from '../../validations/zod/orders.schema';
 import { membershipService } from '../membership/membership.service';
+import { settingsService } from '../settings/settings.service';
 
 /**
  * Allowed status transitions
@@ -43,25 +39,26 @@ class OrdersService {
      * - Create order + items in transaction
      */
     async createOrder(customerId: string, data: CreateOrderInput): Promise<OrderWithRelations> {
-        // Step 1: Validate combo (1 FRAME + 1 LENS + 0-N SERVICE)
-        await this.validateOrderCombo(data.items);
-
-        // Step 2: Get products and calculate total
-        const productsMap = new Map();
-        for (const item of data.items) {
-            const product = await productsRepository.findById(item.productId);
-            if (!product) {
-                throw new NotFoundError(`Product with ID ${item.productId} not found`);
-            }
-            productsMap.set(item.productId, product);
+        // Step 1: Get products and calculate total (Batch fetch to fix N+1)
+        const productIds = data.items.map(item => item.productId);
+        const products = await productsRepository.findManyByIds(productIds);
+        
+        if (products.length !== new Set(productIds).size) {
+            const missingId = productIds.find(id => !products.find(p => p.id === id));
+            throw new NotFoundError(`Product with ID ${missingId} not found`);
         }
+
+        const productsMap = new Map(products.map(p => [p.id, p]));
+
+        // Step 2: Validate combo (1 FRAME + 1 LENS + 0-N SERVICE)
+        await this.validateOrderCombo(data.items, products);
 
         // Step 3: Check stock availability & Identify Pre-order
         let isPreorder = false;
         let maxLeadTime = 0;
 
         for (const item of data.items) {
-            const product = productsMap.get(item.productId);
+            const product = productsMap.get(item.productId)!;
 
             // Skip SERVICE products (no inventory)
             if (product.type === 'SERVICE') continue;
@@ -89,13 +86,21 @@ class OrdersService {
 
         // Step 5: Calculate total amount
         const baseAmount = data.items.reduce((sum, item) => {
-            const product = productsMap.get(item.productId);
+            const product = productsMap.get(item.productId)!;
             return sum + Number(product.price) * item.quantity;
         }, 0);
 
         // Step 5b: Apply membership discount
         const membershipTier = await membershipService.getUserTier(customerId);
-        const discountPercent = membershipTier ? Number(membershipTier.discountPercent) : 0;
+        let discountPercent = 0;
+        
+        if (membershipTier) {
+            discountPercent = Number(membershipTier.discountPercent);
+        } else {
+            // Get default discount for users without a tier
+            discountPercent = await settingsService.get<number>('membership.default_discount_percent', 0);
+        }
+
         const discountAmount = Math.round(baseAmount * discountPercent / 100);
         const totalAmount = baseAmount - discountAmount;
 
@@ -110,13 +115,13 @@ class OrdersService {
             items: data.items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
-                unitPrice: Number(productsMap.get(item.productId).price),
+                unitPrice: Number(productsMap.get(item.productId)!.price),
             })),
         };
 
         const order = await ordersRepository.create(orderData);
 
-        // Step 6: Return order with relations
+        // Step 7: Return order with relations
         const createdOrder = await ordersRepository.findById(order.id);
         if (!createdOrder) {
             throw new Error('Failed to retrieve created order');
@@ -129,7 +134,8 @@ class OrdersService {
      * Validate order combo: Must have exactly 1 FRAME + 1 LENS
      */
     private async validateOrderCombo(
-        items: Array<{ productId: string; quantity: number }>
+        items: Array<{ productId: string; quantity: number }>,
+        products: any[]
     ): Promise<void> {
         const productTypes: Record<string, number> = {
             FRAME: 0,
@@ -137,8 +143,10 @@ class OrdersService {
             SERVICE: 0,
         };
 
+        const productsMap = new Map(products.map(p => [p.id, p]));
+
         for (const item of items) {
-            const product = await productsRepository.findById(item.productId);
+            const product = productsMap.get(item.productId);
             if (!product) {
                 throw new NotFoundError(`Product with ID ${item.productId} not found`);
             }
@@ -244,8 +252,16 @@ class OrdersService {
                 const available = inv.quantity - inv.reservedQuantity;
                 if (available > 0) {
                     const toReserve = Math.min(available, remainingQty);
-                    await inventoryRepository.reserve(inv.id, toReserve);
-                    remainingQty -= toReserve;
+                    try {
+                        // FIX H-01: Atomic reservation with availability check
+                        await inventoryRepository.reserveWithCheck(inv.id, toReserve);
+                        remainingQty -= toReserve;
+                    } catch (error: any) {
+                        if (error.message === 'INSUFFICIENT_STOCK') {
+                            continue; // Try next store
+                        }
+                        throw error;
+                    }
                 }
             }
 
@@ -339,13 +355,24 @@ class OrdersService {
 
         // Transaction: Update order + Update inventory
         // 1. Prepare data BEFORE transaction (Minimize DB lock time)
+        const productIds = order.orderItems
+            .filter(item => item.product.type !== 'SERVICE')
+            .map(item => item.productId);
+        
+        const allInventories = await inventoryRepository.findManyByProducts(productIds);
+        const inventoryMap = new Map<string, InventoryWithRelations[]>();
+        for (const inv of allInventories) {
+            if (!inventoryMap.has(inv.productId)) inventoryMap.set(inv.productId, []);
+            inventoryMap.get(inv.productId)!.push(inv);
+        }
+
         const updateOperations: Array<(tx: any) => Promise<any>> = [];
 
         // Check and calculate inventory updates
         for (const item of order.orderItems) {
             if (item.product.type === 'SERVICE') continue;
 
-            const inventories = await inventoryRepository.getByProduct(item.productId);
+            const inventories = inventoryMap.get(item.productId) || [];
             // Sort by reservedQuantity desc to prioritizing using reserved stock
             inventories.sort((a, b) => b.reservedQuantity - a.reservedQuantity);
 
@@ -468,10 +495,21 @@ class OrdersService {
      * Unreserve inventory for cancelled order
      */
     private async unreserveInventoryForOrder(order: OrderWithRelations): Promise<void> {
+        const productIds = order.orderItems
+            .filter(item => item.product.type !== 'SERVICE')
+            .map(item => item.productId);
+        
+        const allInventories = await inventoryRepository.findManyByProducts(productIds);
+        const inventoryMap = new Map<string, InventoryWithRelations[]>();
+        for (const inv of allInventories) {
+            if (!inventoryMap.has(inv.productId)) inventoryMap.set(inv.productId, []);
+            inventoryMap.get(inv.productId)!.push(inv);
+        }
+
         for (const item of order.orderItems) {
             if (item.product.type === 'SERVICE') continue;
 
-            const inventories = await inventoryRepository.getByProduct(item.productId);
+            const inventories = inventoryMap.get(item.productId) || [];
 
             let remainingQty = item.quantity;
             for (const inv of inventories) {
@@ -608,13 +646,24 @@ class OrdersService {
         this.validateStatusTransition(order.status, 'COMPLETED');
 
         // Transaction: Update order + Update inventory
+        const productIds = order.orderItems
+            .filter(item => item.product.type !== 'SERVICE')
+            .map(item => item.productId);
+        
+        const allInventories = await inventoryRepository.findManyByProducts(productIds);
+        const inventoryMap = new Map<string, InventoryWithRelations[]>();
+        for (const inv of allInventories) {
+            if (!inventoryMap.has(inv.productId)) inventoryMap.set(inv.productId, []);
+            inventoryMap.get(inv.productId)!.push(inv);
+        }
+
         const updateOperations: Array<(tx: any) => Promise<any>> = [];
 
         // Check and calculate inventory updates
         for (const item of order.orderItems) {
             if (item.product.type === 'SERVICE') continue;
 
-            const inventories = await inventoryRepository.getByProduct(item.productId);
+            const inventories = inventoryMap.get(item.productId) || [];
             inventories.sort((a, b) => b.reservedQuantity - a.reservedQuantity);
 
             let remainingQty = item.quantity;
