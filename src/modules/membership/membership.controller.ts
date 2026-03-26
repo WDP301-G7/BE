@@ -140,6 +140,42 @@ class MembershipController {
             next(error);
         }
     }
+
+    /**
+     * @route   GET /api/membership/users/:userId/membership
+     * @desc    Get membership status for a specific user (Admin)
+     * @access  Private (Admin, Manager)
+     */
+    async getUserMembership(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const userId = req.params.userId as string;
+            const status = await membershipService.getMembershipStatus(userId);
+            res.status(200).json(apiResponse.success(status, 'User membership retrieved successfully'));
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @route   POST /api/membership/users/:userId/membership/adjust-points
+     * @desc    Adjust user membership points/spending manually (Admin)
+     * @access  Private (Admin)
+     */
+    async adjustPoints(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const userId = req.params.userId as string;
+            const { amount, reason, note } = req.body;
+            const result = await membershipService.adjustPoints(userId, {
+                amount,
+                reason,
+                note,
+                administeredBy: req.user!.userId,
+            });
+            res.status(200).json(apiResponse.success(result, 'Points adjusted successfully'));
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export const membershipController = new MembershipController();

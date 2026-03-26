@@ -9,6 +9,7 @@ export interface GetUsersFilter {
   status?: UserStatus;
   search?: string;
   storeId?: string;
+  includeMembership?: boolean;
 }
 
 export interface PaginatedUsers {
@@ -75,6 +76,7 @@ class UsersRepository {
           tierUpdatedAt: true,
           createdAt: true,
           updatedAt: true,
+          membershipTier: filter.includeMembership || false,
         },
       }),
       prisma.user.count({ where }),

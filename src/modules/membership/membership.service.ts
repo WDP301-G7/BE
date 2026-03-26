@@ -206,6 +206,49 @@ class MembershipService {
     async getMyHistory(userId: string, page: number, limit: number): Promise<PaginatedHistory> {
         return membershipRepository.getPaginatedHistory({ userId, page, limit });
     }
+
+    // ─── Admin: Point adjustment ────────────────────────────────────────────────
+
+    async adjustPoints(
+        userId: string,
+        data: { amount: number; reason: string; note?: string; administeredBy: string }
+    ): Promise<MembershipStatus> {
+        const user = await membershipRepository.findUserWithTier(userId);
+        if (!user) throw new NotFoundError('User not found');
+
+        const allTiers = await this.getCachedTiers();
+        const now = new Date();
+
+        // Calculate new spending values
+        const spendInPeriod = Number(user.spendInPeriod) + data.amount;
+
+        // Calculate eligible tier: highest tier whose minSpend ≤ spendInPeriod
+        const eligibleTiers = allTiers.filter((t) => Number(t.minSpend) <= spendInPeriod);
+        const newTier = eligibleTiers.length > 0 ? eligibleTiers[eligibleTiers.length - 1] : null;
+
+        // Persist updates
+        await membershipRepository.updateMembershipAtomic(userId, {
+            amount: data.amount,
+            spendInPeriod: spendInPeriod,
+            periodStartDate: user.periodStartDate || now,
+            membershipTierId: newTier?.id ?? null,
+            tierUpdatedAt: now,
+        });
+
+        // Log the adjustment in history
+        // Since we can't store note/amount in current schema, we use the reason field
+        // and truncate to 50 chars as defined in prisma
+        const historyReason = `ADMIN_ADJUST: ${data.reason}`.substring(0, 50);
+
+        await membershipRepository.createHistory({
+            userId,
+            oldTierId: user.membershipTierId,
+            newTierId: newTier?.id ?? user.membershipTierId ?? '', // Fallback to avoid null if possible or use a default
+            reason: historyReason,
+        });
+
+        return this.getMembershipStatus(userId);
+    }
 }
 
 export const membershipService = new MembershipService();

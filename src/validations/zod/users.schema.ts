@@ -42,6 +42,7 @@ export const getUsersQuerySchema = z.object({
       status: z.nativeEnum(UserStatus).optional(),
       search: z.string().optional(),
       storeId: z.string().uuid().optional(),
+      include: z.string().optional(),
     })
     .transform((data) => ({
       page: data.page ? parseInt(data.page, 10) : 1,
@@ -50,6 +51,7 @@ export const getUsersQuerySchema = z.object({
       status: data.status,
       search: data.search,
       storeId: data.storeId,
+      includeMembership: data.include === 'membership',
     })),
 });
 

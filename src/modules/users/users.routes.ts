@@ -82,7 +82,14 @@ router.get(
  *       - in: query
  *         name: storeId
  *         schema:
- *           type: integer
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: include
+ *         schema:
+ *           type: string
+ *           enum: [membership]
+ *         description: Set to 'membership' to include user membership information
  *     responses:
  *       200:
  *         description: Users retrieved successfully
