@@ -25,34 +25,21 @@ const router = Router();
 
 /**
  * @swagger
- * /membership/tiers:
- *   get:
- *     summary: Get all membership tiers
- *     tags: [Membership]
  *     responses:
  *       200:
  *         description: List of membership tiers
+ *     security: []
  */
 router.get('/tiers', membershipController.getAllTiers.bind(membershipController));
 
 /**
  * @swagger
- * /membership/tiers/{id}:
- *   get:
- *     summary: Get a single membership tier
- *     tags: [Membership]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
  *     responses:
  *       200:
  *         description: Membership tier details
  *       404:
  *         description: Tier not found
+ *     security: []
  */
 router.get(
     '/tiers/:id',
@@ -325,6 +312,88 @@ router.get(
     roleMiddleware([ROLES.ADMIN, ROLES.OPERATION, ROLES.MANAGER]),
     validate(getMembershipHistoryQuerySchema),
     membershipController.getHistory.bind(membershipController)
+);
+
+// ─── Admin: User membership management ───────────────────────────────────────
+
+/**
+ * @swagger
+ * /users/{userId}/membership:
+ *   get:
+ *     summary: Get membership status for a specific user (Admin)
+ *     tags: [Membership]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User membership details
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: User or membership not found
+ */
+router.get(
+    '/users/:userId/membership',
+    authMiddleware,
+    roleMiddleware([ROLES.ADMIN, ROLES.MANAGER]),
+    membershipController.getUserMembership.bind(membershipController)
+);
+
+/**
+ * @swagger
+ * /users/{userId}/membership/adjust-points:
+ *   post:
+ *     summary: Adjust user membership points/spending manually (Admin)
+ *     tags: [Membership]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [amount, reason]
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Amount to add (positive) or subtract (negative) from totalSpent and spendInPeriod
+ *                 example: 1000000
+ *               reason:
+ *                 type: string
+ *                 example: "Manual adjustment for customer loyalty"
+ *               note:
+ *                 type: string
+ *                 example: "Compensating for order issue #123"
+ *     responses:
+ *       200:
+ *         description: Points adjusted successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+    '/users/:userId/membership/adjust-points',
+    authMiddleware,
+    roleMiddleware([ROLES.ADMIN]),
+    membershipController.adjustPoints.bind(membershipController)
 );
 
 export default router;
