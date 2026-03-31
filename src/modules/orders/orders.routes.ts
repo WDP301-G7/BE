@@ -162,6 +162,38 @@ router.post(
 
 /**
  * @swagger
+ * /orders/{id}/confirm-receipt:
+ *   post:
+ *     summary: Customer confirms they received the order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Receipt confirmed successfully
+ *       400:
+ *         description: Invalid order status
+ *       403:
+ *         description: Not order owner
+ *       404:
+ *         description: Order not found
+ */
+router.post(
+    '/:id/confirm-receipt',
+    authMiddleware,
+    roleMiddleware([ROLES.CUSTOMER]),
+    validate(orderIdSchema),
+    ordersController.confirmReceipt.bind(ordersController)
+);
+
+/**
+ * @swagger
  * /orders/{id}:
  *   get:
  *     summary: Get order by ID

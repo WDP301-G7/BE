@@ -17,11 +17,11 @@ export class LogisticsController {
     async ghnWebhook(req: Request, res: Response): Promise<void> {
         try {
             const data = req.body;
-            
+
             // Validate Token Verification (optional but recommended)
             // const token = req.headers['token'] || req.headers['ghn-webhook-token'];
             // if (token !== process.env.GHN_WEBHOOK_SECRET) return res.status(401).send('Unauthorized');
-            
+
             if (!data || !data.Status || (!data.ClientOrderCode && !data.OrderCode)) {
                 res.status(400).json({ code: 400, message: 'Invalid payload' });
                 return;
@@ -29,16 +29,16 @@ export class LogisticsController {
 
             const status = data.Status;
             let orderId = data.ClientOrderCode;
-            
+
             // Tìm order bằng ClientOrderCode (orderId) trước
             let order: any = null;
             if (orderId) {
                 order = await ordersRepository.findById(orderId);
             }
-            
+
             // Fallback: Tìm bằng OrderCode (Tracking Number) nếu không có hoặc không khớp ClientOrderCode
             if (!order && data.OrderCode) {
-                const orderFromPrisma = await import('../../config/database').then(m => 
+                const orderFromPrisma = await import('../../config/database').then(m =>
                     m.prisma.order.findFirst({ where: { trackingNumber: data.OrderCode } })
                 );
                 if (orderFromPrisma) {
@@ -55,9 +55,9 @@ export class LogisticsController {
             let newShippingStatus: ShippingStatus | null = null;
             let shouldUpdateOrderToCompleted = false;
             let notificationMessage = '';
-            
+
             // Map GHN Status to our internal ShippingStatus
-            switch(status) {
+            switch (status) {
                 case 'picking':
                     newShippingStatus = 'PICKING';
                     break;

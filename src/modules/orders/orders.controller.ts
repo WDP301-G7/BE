@@ -330,6 +330,24 @@ class OrdersController {
             next(error);
         }
     }
+
+    /**
+     * @route   POST /api/orders/:id/confirm-receipt
+     * @desc    Customer confirms they received the order
+     * @access  Private (Customer)
+     */
+    async confirmReceipt(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const orderId = req.params.id as string;
+            const customerId = req.user!.userId;
+
+            const order = await ordersService.confirmReceipt(orderId, customerId);
+
+            res.status(200).json(apiResponse.success(order, 'Receipt confirmed and order completed'));
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export const ordersController = new OrdersController();
