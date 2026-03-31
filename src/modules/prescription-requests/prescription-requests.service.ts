@@ -10,6 +10,7 @@ import {
     CloseRequestInput,
     GetPrescriptionRequestsQuery,
 } from '../../validations/zod/prescription-requests.schema';
+import { notificationsService } from '../notifications/notifications.service';
 
 const prisma = new PrismaClient();
 
@@ -70,6 +71,14 @@ class PrescriptionRequestsService {
                 store: true,
                 images: true,
             },
+        });
+
+        // Notify OPERATION of new prescription request
+        notificationsService.broadcastToRole('OPERATION', {
+            type: 'PRESCRIPTION_REQUEST_NEW',
+            title: 'Yêu cầu tư vấn mới',
+            message: `Khách hàng ${request.customer.fullName} có yêu cầu tư vấn đo kính mới`,
+            data: { requestId: request.id },
         });
 
         return request;
@@ -212,6 +221,16 @@ class PrescriptionRequestsService {
             },
         });
 
+        // Notify customer when being contacted
+        if (updated.status === PrescriptionRequestStatus.CONTACTING) {
+            notificationsService.sendToUser(request.customerId, {
+                type: 'PRESCRIPTION_REQUEST_CONTACTING',
+                title: 'Nhân viên đang liên hệ',
+                message: 'Nhân viên đang liên hệ với bạn về yêu cầu tư vấn đo kính',
+                data: { requestId: id },
+            });
+        }
+
         return updated;
     }
 
@@ -329,6 +348,14 @@ class PrescriptionRequestsService {
             },
         });
 
+        // Notify customer of quoted order
+        notificationsService.sendToUser(request.customerId, {
+            type: 'PRESCRIPTION_REQUEST_QUOTED',
+            title: 'Đơn kính theo tọa đã được tạo',
+            message: `Đơn hàng kính theo tọa của bạn đã được tạo với tổng tiền ${Number(result?.totalAmount ?? 0).toLocaleString('vi-VN')}đ`,
+            data: { requestId, orderId },
+        });
+
         return result;
     }
 
@@ -358,6 +385,14 @@ class PrescriptionRequestsService {
             },
         });
 
+        // Notify customer of scheduled appointment
+        notificationsService.sendToUser(request.customerId, {
+            type: 'PRESCRIPTION_REQUEST_SCHEDULED',
+            title: 'Lịch khám đã được đặt',
+            message: `Lịch khám của bạn đã được đặt vào ngày ${new Date(data.appointmentDate).toLocaleDateString('vi-VN')}`,
+            data: { requestId: id },
+        });
+
         return updated;
     }
 
@@ -384,6 +419,14 @@ class PrescriptionRequestsService {
                 handler: true,
                 images: true,
             },
+        });
+
+        // Notify customer when request is closed
+        notificationsService.sendToUser(request.customerId, {
+            type: 'PRESCRIPTION_REQUEST_CLOSED',
+            title: 'Yêu cầu tư vấn đã được đóng',
+            message: `Yêu cầu tư vấn của bạn đã được đóng (${data.status})`,
+            data: { requestId: id },
         });
 
         return updated;

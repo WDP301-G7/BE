@@ -17,6 +17,7 @@ import {
 import { prisma } from '../../config/database';
 import { uploadToSupabase, deleteFromSupabase, extractPathFromUrl, validateImageFile } from '../../utils/upload';
 import { membershipService } from '../membership/membership.service';
+import { notificationsService } from '../notifications/notifications.service';
 
 /**
  * Default business rules (used as fallback when customer has no membership tier)
@@ -152,6 +153,21 @@ class ReturnsService {
         if (!created) {
             throw new Error('Failed to retrieve created return request');
         }
+
+        // Notify OPERATION and STAFF of new return request
+        const typeLabel = data.type === 'RETURN' ? 'Trả hàng' : data.type === 'EXCHANGE' ? 'Đổi hàng' : 'Bảo hành';
+        notificationsService.broadcastToRole('OPERATION', {
+            type: 'RETURN_REQUEST_NEW',
+            title: `Yêu cầu ${typeLabel} mới`,
+            message: `Có yêu cầu ${typeLabel.toLowerCase()} mới cho đơn hàng #${data.orderId.slice(0, 8)}`,
+            data: { returnId: returnRequest.id, orderId: data.orderId },
+        });
+        notificationsService.broadcastToRole('STAFF', {
+            type: 'RETURN_REQUEST_NEW',
+            title: `Yêu cầu ${typeLabel} mới`,
+            message: `Có yêu cầu ${typeLabel.toLowerCase()} mới cho đơn hàng #${data.orderId.slice(0, 8)}`,
+            data: { returnId: returnRequest.id, orderId: data.orderId },
+        });
 
         return created;
     }
@@ -338,6 +354,21 @@ class ReturnsService {
             await returnsRepository.update(returnId, { priceDifference });
         }
 
+        // Notify customer
+        notificationsService.sendToUser(returnRequest.customerId, {
+            type: 'RETURN_REQUEST_APPROVED',
+            title: 'Yêu cầu đã được phê duyệt',
+            message: `Yêu cầu đổi/trả của bạn cho đơn #${returnRequest.orderId.slice(0, 8)} đã được phê duyệt`,
+            data: { returnId },
+        });
+        // Notify STAFF to complete the return
+        notificationsService.broadcastToRole('STAFF', {
+            type: 'RETURN_REQUEST_APPROVED',
+            title: 'Yêu cầu đã được duyệt — chờ hoàn tất',
+            message: `Yêu cầu đổi/trả #${returnId.slice(0, 8)} đã được duyệt, cần hoàn tất tại cửa hàng`,
+            data: { returnId },
+        });
+
         return updated;
     }
 
@@ -383,7 +414,17 @@ class ReturnsService {
             throw new BadRequestError('Chỉ có thể từ chối yêu cầu đang chờ xử lý');
         }
 
-        return await returnsRepository.reject(returnId, handledBy, rejectionReason);
+        const rejected = await returnsRepository.reject(returnId, handledBy, rejectionReason);
+
+        // Notify customer of rejection
+        notificationsService.sendToUser(returnRequest.customerId, {
+            type: 'RETURN_REQUEST_REJECTED',
+            title: 'Yêu cầu bị từ chối',
+            message: `Yêu cầu đổi/trả của bạn bị từ chối: ${rejectionReason}`,
+            data: { returnId },
+        });
+
+        return rejected;
     }
 
     /**
@@ -431,7 +472,7 @@ class ReturnsService {
         }
 
         // Transaction: Update return + Upload images + Update inventory
-        return await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx) => {
             // 1. Update return request
             const updated = await tx.returnRequest.update({
                 where: { id: returnId },
@@ -465,6 +506,17 @@ class ReturnsService {
 
             return updated;
         });
+
+        // Notify customer the return is complete
+        const refundMsg = data.refundAmount ? ` Hoàn tiền: ${Number(data.refundAmount).toLocaleString('vi-VN')}đ.` : '';
+        notificationsService.sendToUser(returnRequest!.customerId, {
+            type: 'RETURN_REQUEST_COMPLETED',
+            title: 'Yêu cầu đổi/trả hoàn tất',
+            message: `Yêu cầu đổi/trả của bạn đã được hoàn tất.${refundMsg}`,
+            data: { returnId },
+        });
+
+        return await returnsRepository.findById(returnId) as any;
     }
 
     /**
@@ -547,7 +599,19 @@ class ReturnsService {
             throw new BadRequestError('Không thể hủy yêu cầu đã hoàn tất hoặc đã bị từ chối');
         }
 
-        return await returnsRepository.updateStatus(returnId, 'REJECTED');
+        const cancelled = await returnsRepository.updateStatus(returnId, 'REJECTED');
+
+        // Notify OPERATION if customer cancelled
+        if (userRole === 'CUSTOMER') {
+            notificationsService.broadcastToRole('OPERATION', {
+                type: 'RETURN_REQUEST_CANCELLED',
+                title: 'Khách hủy yêu cầu đổi/trả',
+                message: `Khách hàng đã hủy yêu cầu đổi/trả #${returnId.slice(0, 8)}`,
+                data: { returnId },
+            });
+        }
+
+        return cancelled;
     }
 
     /**

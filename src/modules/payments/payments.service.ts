@@ -11,6 +11,8 @@ import {
     PaymentVerificationResult,
 } from '../../types/payment.types';
 import { NotFoundError, BadRequestError } from '../../utils/errorHandler';
+import { notificationsService } from '../notifications/notifications.service';
+import { ordersRepository } from '../orders/orders.repository';
 
 class PaymentsService {
     /**
@@ -137,6 +139,17 @@ class PaymentsService {
             // Payment failed
             await paymentsRepository.updateStatus(payment.id, 'FAILED');
 
+            // Notify customer of payment failure
+            const failedOrder = await ordersRepository.findById(orderId);
+            if (failedOrder) {
+                notificationsService.sendToUser(failedOrder.customerId, {
+                    type: 'PAYMENT_FAILED',
+                    title: 'Thanh toán thất bại',
+                    message: `Thanh toán đơn hàng #${orderId.slice(0, 8)} thất bại. Vui lòng thử lại.`,
+                    data: { orderId },
+                });
+            }
+
             return {
                 isValid: true,
                 orderId,
@@ -215,6 +228,18 @@ class PaymentsService {
             return await this.processPaymentSuccess(payment, orderId, amount, transactionId, responseCode);
         } else {
             await paymentsRepository.updateStatus(payment.id, 'FAILED');
+
+            // Notify customer of payment failure (return URL path)
+            const failedOrder = await ordersRepository.findById(orderId);
+            if (failedOrder) {
+                notificationsService.sendToUser(failedOrder.customerId, {
+                    type: 'PAYMENT_FAILED',
+                    title: 'Thanh toán thất bại',
+                    message: `Thanh toán đơn hàng #${orderId.slice(0, 8)} thất bại. Vui lòng thử lại.`,
+                    data: { orderId },
+                });
+            }
+
             return {
                 isValid: true,
                 orderId,
@@ -240,14 +265,27 @@ class PaymentsService {
         await paymentsRepository.updateStatus(payment.id, 'SUCCESS', new Date());
 
         // Check if this is a prescription order by trying to call handlePaymentSuccess
-        // If it's a prescription order, it will update both order and prescription request
-        // If it's a regular order, it will just update the order status
         try {
             await ordersService.handlePaymentSuccess(orderId);
         } catch (error) {
-            // If handlePaymentSuccess fails (e.g., no prescription request), 
-            // fall back to regular payment status update
             await ordersService.updatePaymentStatus(orderId, 'PAID');
+        }
+
+        // Notify customer + OPERATION of payment success
+        const order = await ordersRepository.findById(orderId);
+        if (order) {
+            notificationsService.sendToUser(order.customerId, {
+                type: 'PAYMENT_SUCCESS',
+                title: 'Thanh toán thành công',
+                message: `Thanh toán đơn hàng #${orderId.slice(0, 8)} thành công với số tiền ${amount.toLocaleString('vi-VN')}đ`,
+                data: { orderId, amount },
+            });
+            notificationsService.broadcastToRole('OPERATION', {
+                type: 'PAYMENT_SUCCESS',
+                title: 'Thanh toán đơn hàng',
+                message: `Đơn hàng #${orderId.slice(0, 8)} đã được thanh toán ${amount.toLocaleString('vi-VN')}đ`,
+                data: { orderId, amount },
+            });
         }
 
         return {

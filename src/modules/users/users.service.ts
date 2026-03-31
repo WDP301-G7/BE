@@ -6,6 +6,7 @@ import { passwordService } from '../../utils/password';
 import { NotFoundError, ForbiddenError, ConflictError, BadRequestError } from '../../utils/errorHandler';
 import { canManageRole, Role } from '../../constants/roles';
 import { uploadToSupabase, deleteFromSupabase, extractPathFromUrl, validateImageFile } from '../../utils/upload';
+import { notificationsService } from '../notifications/notifications.service';
 
 class UsersService {
   /**
@@ -143,6 +144,25 @@ class UsersService {
     // Update user with avatar URL if uploaded
     const updateData = avatarFile ? { ...data, avatarUrl } : data;
     const updatedUser = await usersRepository.update(id, updateData as any);
+
+    // Notify user if their account status changed
+    if (data.status && data.status !== user.status) {
+      if (data.status === 'BANNED') {
+        notificationsService.sendToUser(id, {
+          type: 'ACCOUNT_BANNED',
+          title: 'Tài khoản bị khóa',
+          message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ để biết thêm.',
+          data: {},
+        });
+      } else if (data.status === 'ACTIVE') {
+        notificationsService.sendToUser(id, {
+          type: 'ACCOUNT_ACTIVATED',
+          title: 'Tài khoản đã được mở khóa',
+          message: 'Tài khoản của bạn đã được mở khóa. Chào mừng bạn trở lại!',
+          data: {},
+        });
+      }
+    }
 
     // Remove password from response
     const { password: _, ...userWithoutPassword } = updatedUser;

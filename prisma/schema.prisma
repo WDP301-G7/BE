@@ -96,6 +96,7 @@ model User {
   prescriptionRequestsAsHandler  PrescriptionRequest[]  @relation("HandlerPrescriptionRequests")
   reviewsAsCustomer              Review[]               @relation("CustomerReviews")
   reviewReplies                  Review[]               @relation("ReviewReplier")
+  notifications                  Notification[]
   
   @@map("users")
   @@index([storeId])
@@ -265,6 +266,17 @@ model Order {
   expiresAt         DateTime?      @map("expires_at")
   quotedAt          DateTime?      @map("quoted_at")
 
+  // Shipping fields
+  deliveryMethod    DeliveryMethod @default(PICKUP_AT_STORE) @map("delivery_method")
+  shippingAddress   String?        @map("shipping_address") @db.VarChar(255)
+  shippingProvinceId Int?          @map("shipping_province_id")
+  shippingDistrictId Int?          @map("shipping_district_id")
+  shippingWardCode   String?       @map("shipping_ward_code") @db.VarChar(20)
+  shippingFee       Decimal        @default(0) @map("shipping_fee") @db.Decimal(15, 2)
+  trackingNumber    String?        @map("tracking_number") @db.VarChar(100)
+  shippingProvider  String?        @map("shipping_provider") @db.VarChar(50)
+  shippingStatus    ShippingStatus? @map("shipping_status")
+
   // Membership discount snapshot
   discountAmount    Decimal        @default(0) @map("discount_amount") @db.Decimal(15, 2)
   membershipTierId  String?        @map("membership_tier_id")
@@ -288,6 +300,21 @@ model Order {
   @@index([customerId])
   @@index([handledBy])
   @@index([orderType, status, paymentStatus])
+  @@index([deliveryMethod, shippingStatus])
+}
+
+enum DeliveryMethod {
+  PICKUP_AT_STORE
+  HOME_DELIVERY
+}
+
+enum ShippingStatus {
+  READY_TO_SHIP
+  PICKING
+  DELIVERING
+  DELIVERED
+  RETURNED
+  CANCELLED
 }
 
 enum OrderType {
@@ -666,6 +693,75 @@ model ReviewImage {
 enum ReviewStatus {
   PUBLISHED
   HIDDEN
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  message   String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  // Orders
+  ORDER_NEW
+  ORDER_ASSIGNED
+  ORDER_CONFIRMED
+  ORDER_APPOINTMENT_SET
+  ORDER_APPOINTMENT_UPDATED
+  ORDER_PROCESSING
+  ORDER_READY
+  ORDER_DELIVERING
+  ORDER_DELIVERED
+  ORDER_COMPLETED
+  ORDER_CANCELLED
+
+  // Prescription Requests
+  PRESCRIPTION_REQUEST_NEW
+  PRESCRIPTION_REQUEST_ASSIGNED
+  PRESCRIPTION_REQUEST_CONTACTING
+  PRESCRIPTION_REQUEST_QUOTED
+  PRESCRIPTION_REQUEST_SCHEDULED
+  PRESCRIPTION_REQUEST_CLOSED
+
+  // Returns
+  RETURN_REQUEST_NEW
+  RETURN_REQUEST_ASSIGNED
+  RETURN_REQUEST_APPROVED
+  RETURN_REQUEST_REJECTED
+  RETURN_REQUEST_COMPLETED
+  RETURN_REQUEST_CANCELLED
+
+  // Payments
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+
+  // Membership
+  MEMBERSHIP_TIER_UPGRADED
+  MEMBERSHIP_POINTS_ADJUSTED
+
+  // Reviews
+  REVIEW_NEW
+  REVIEW_HIDDEN
+  REVIEW_REPLIED
+
+  // Users
+  ACCOUNT_BANNED
+  ACCOUNT_ACTIVATED
 }
 
 // ============================================

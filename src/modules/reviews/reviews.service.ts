@@ -24,6 +24,7 @@ import {
 } from '../../validations/zod/reviews.schema';
 
 import { settingsService } from '../settings/settings.service';
+import { notificationsService } from '../notifications/notifications.service';
 
 // ─── Business rules constants ─────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ class ReviewsService {
         const editableUntil = new Date();
         editableUntil.setDate(editableUntil.getDate() + editableDays);
 
-        return await reviewsRepository.create({
+        const created = await reviewsRepository.create({
             orderItemId: data.orderItemId,
             orderId: orderItem.orderId,
             productId: orderItem.productId,
@@ -130,6 +131,16 @@ class ReviewsService {
             editableUntil,
             imageUrls,
         });
+
+        // Notify OPERATION of new review
+        notificationsService.broadcastToRole('OPERATION', {
+            type: 'REVIEW_NEW',
+            title: 'Đánh giá mới',
+            message: `Khách hàng đã đánh giá ${orderItem.product.name}: ${data.rating}⭐`,
+            data: { reviewId: created.id, productId: orderItem.productId },
+        });
+
+        return created;
     }
 
     /**
@@ -311,7 +322,17 @@ class ReviewsService {
             );
         }
 
-        return await reviewsRepository.saveReply(reviewId, data.replyContent, repliedBy);
+        const saved = await reviewsRepository.saveReply(reviewId, data.replyContent, repliedBy);
+
+        // Notify customer of new reply
+        notificationsService.sendToUser(review.customerId, {
+            type: 'REVIEW_REPLIED',
+            title: 'Cửa hàng đã phản hồi đánh giá',
+            message: 'Cửa hàng đã phản hồi đánh giá của bạn',
+            data: { reviewId },
+        });
+
+        return saved;
     }
 
     /**
@@ -373,7 +394,17 @@ class ReviewsService {
             throw new BadRequestError('Review đã bị ẩn rồi');
         }
 
-        return await reviewsRepository.updateStatus(reviewId, 'HIDDEN');
+        const hidden = await reviewsRepository.updateStatus(reviewId, 'HIDDEN');
+
+        // Notify customer their review was hidden
+        notificationsService.sendToUser(review.customerId, {
+            type: 'REVIEW_HIDDEN',
+            title: 'Đánh giá của bạn đã bị ẩn',
+            message: 'Đánh giá của bạn đã bị ẩn bởi quản lý cửa hàng',
+            data: { reviewId },
+        });
+
+        return hidden;
     }
 
     /**
