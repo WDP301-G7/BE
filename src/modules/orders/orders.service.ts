@@ -14,6 +14,8 @@ import { prisma } from '../../config/database';
 import { CreateOrderInput, ConfirmOrderInput } from '../../validations/zod/orders.schema';
 import { membershipService } from '../membership/membership.service';
 import { settingsService } from '../settings/settings.service';
+import { notificationsService } from '../notifications/notifications.service';
+import { GhnService } from '../../integrations/ghn/ghn.service';
 
 /**
  * Allowed status transitions
@@ -50,8 +52,8 @@ class OrdersService {
 
         const productsMap = new Map(products.map(p => [p.id, p]));
 
-        // Step 2: Validate combo (1 FRAME + 1 LENS + 0-N SERVICE)
-        await this.validateOrderCombo(data.items, products);
+        // Step 2: Validate combo (FRAME + optional LENS) based on delivery method
+        await this.validateOrderCombo(data.items, products, data.deliveryMethod);
 
         // Step 3: Check stock availability & Identify Pre-order
         let isPreorder = false;
@@ -102,7 +104,18 @@ class OrdersService {
         }
 
         const discountAmount = Math.round(baseAmount * discountPercent / 100);
-        const totalAmount = baseAmount - discountAmount;
+        let totalAmount = baseAmount - discountAmount;
+        let shippingFee = 0;
+
+        // Step 5c: Calculate shipping fee
+        if (data.deliveryMethod === 'HOME_DELIVERY' && data.shippingDistrictId && data.shippingWardCode) {
+            shippingFee = await GhnService.calculateShippingFee(
+                data.shippingDistrictId,
+                data.shippingWardCode,
+                200 
+            );
+            totalAmount += shippingFee;
+        }
 
         // Step 6: Create order in database
         const orderData: CreateOrderData = {
@@ -117,6 +130,12 @@ class OrdersService {
                 quantity: item.quantity,
                 unitPrice: Number(productsMap.get(item.productId)!.price),
             })),
+            deliveryMethod: data.deliveryMethod,
+            shippingAddress: data.shippingAddress,
+            shippingProvinceId: data.shippingProvinceId,
+            shippingDistrictId: data.shippingDistrictId,
+            shippingWardCode: data.shippingWardCode,
+            shippingFee,
         };
 
         const order = await ordersRepository.create(orderData);
@@ -127,20 +146,28 @@ class OrdersService {
             throw new Error('Failed to retrieve created order');
         }
 
+        // Notify OPERATION of new order
+        notificationsService.broadcastToRole('OPERATION', {
+            type: 'ORDER_NEW',
+            title: 'Đơn hàng mới',
+            message: `Có đơn hàng mới #${order.id.slice(0, 8)} vừa được tạo`,
+            data: { orderId: order.id },
+        });
+
         return createdOrder;
     }
 
     /**
-     * Validate order combo: Must have exactly 1 FRAME + 1 LENS
+     * Validate order combo: Frame logic + Delivery Method rule
      */
     private async validateOrderCombo(
         items: Array<{ productId: string; quantity: number }>,
-        products: any[]
+        products: any[],
+        deliveryMethod?: string
     ): Promise<void> {
-        const productTypes: Record<string, number> = {
+        const productTypes: Record<'FRAME' | 'LENS', number> = {
             FRAME: 0,
             LENS: 0,
-            SERVICE: 0,
         };
 
         const productsMap = new Map(products.map(p => [p.id, p]));
@@ -151,21 +178,25 @@ class OrdersService {
                 throw new NotFoundError(`Product with ID ${item.productId} not found`);
             }
 
-            if (product.type in productTypes) {
-                productTypes[product.type] += item.quantity;
+            if (product.type === 'FRAME') {
+                productTypes.FRAME += item.quantity;
+            } else if (product.type === 'LENS') {
+                productTypes.LENS += item.quantity;
             }
         }
 
-        // Validation rules
-        if (productTypes.FRAME !== 1) {
-            throw new BadRequestError('Order must have exactly 1 FRAME');
+        // Kiểm tra tối thiểu: Phải có ít nhất Gọng hoặc Tròng
+        if (productTypes.FRAME < 1 && productTypes.LENS < 1) {
+            throw new BadRequestError('Đơn hàng phải chứa ít nhất 1 Gọng kính hoặc 1 Tròng kính.');
         }
 
-        if (productTypes.LENS !== 1) {
-            throw new BadRequestError('Order must have exactly 1 LENS');
+        // Quy tắc Giao hàng tận nơi: Không áp dụng cho đơn có Tròng kính
+        if (deliveryMethod === 'HOME_DELIVERY' && productTypes.LENS > 0) {
+            throw new BadRequestError(
+                'Giao hàng tận nơi (HOME_DELIVERY) chỉ áp dụng cho đơn hàng mua Gọng kính lẻ. ' +
+                'Đơn hàng có Tròng kính bắt buộc phải chọn Nhận tại tiệm (PICKUP_AT_STORE) để đo khám và mài lắp.'
+            );
         }
-
-        // SERVICE is optional (0-N allowed)
     }
 
     /**
@@ -219,6 +250,11 @@ class OrdersService {
             throw new BadRequestError('Order must be in CONFIRMED status to set appointment');
         }
 
+        // Bắt buộc thanh toán 100%
+        if (order.paymentStatus !== 'PAID') {
+            throw new BadRequestError('Đơn hàng phải được thanh toán 100% trước khi xác nhận và đặt lịch hẹn');
+        }
+
         // Double-check stock availability and reserve
         await this.reserveInventoryForOrder(order);
 
@@ -230,6 +266,24 @@ class OrdersService {
             data.appointmentNote,
             data.assignedStaffId
         );
+
+        // Notify customer of appointment
+        notificationsService.sendToUser(order.customerId, {
+            type: 'ORDER_APPOINTMENT_SET',
+            title: 'Lịch hẹn đã được đặt',
+            message: `Đơn hàng #${orderId.slice(0, 8)} có lịch hẹn vào ${appointmentDate.toLocaleDateString('vi-VN')}`,
+            data: { orderId },
+        });
+
+        // Notify the assigned staff (if Operation assigned one)
+        if (data.assignedStaffId) {
+            notificationsService.sendToUser(data.assignedStaffId, {
+                type: 'ORDER_ASSIGNED',
+                title: '📌 Có đơn hàng mới được giao',
+                message: `Bạn đã được phân công xử lý đơn hàng #${orderId.slice(0, 8)}`,
+                data: { orderId },
+            });
+        }
 
         return updatedOrder;
     }
@@ -291,7 +345,17 @@ class OrdersService {
         }
 
         const date = new Date(appointmentDate);
-        return await ordersRepository.setAppointment(orderId, date, appointmentNote);
+        const updated = await ordersRepository.setAppointment(orderId, date, appointmentNote);
+
+        // Notify customer of appointment update
+        notificationsService.sendToUser(order.customerId, {
+            type: 'ORDER_APPOINTMENT_UPDATED',
+            title: 'Lịch hẹn đã được cập nhật',
+            message: `Lịch hẹn của đơn #${orderId.slice(0, 8)} đã được cập nhật thành ${date.toLocaleDateString('vi-VN')}`,
+            data: { orderId },
+        });
+
+        return updated;
     }
 
     /**
@@ -307,14 +371,29 @@ class OrdersService {
             throw new BadRequestError('Order must be in WAITING_CUSTOMER status to start processing');
         }
 
+        // Bắt buộc thanh toán 100%
+        if (order.paymentStatus !== 'PAID') {
+            throw new BadRequestError('Đơn hàng phải được thanh toán 100% trước khi có thể bắt đầu xử lý');
+        }
+
         // Validate transition
         this.validateStatusTransition(order.status, 'PROCESSING');
 
         // Update status and assign staff if not assigned
-        return await ordersRepository.update(orderId, {
+        const updated = await ordersRepository.update(orderId, {
             status: 'PROCESSING',
             ...((!order.handledBy && { handledBy: staffId })),
         });
+
+        // Notify customer
+        notificationsService.sendToUser(order.customerId, {
+            type: 'ORDER_PROCESSING',
+            title: 'Đơn hàng đang được xử lý',
+            message: `Đơn hàng #${orderId.slice(0, 8)} của bạn đang được xử lý`,
+            data: { orderId },
+        });
+
+        return updated;
     }
 
     /**
@@ -330,9 +409,61 @@ class OrdersService {
             throw new BadRequestError('Order must be in PROCESSING status to mark as ready');
         }
 
+        // Bắt buộc thanh toán 100%
+        if (order.paymentStatus !== 'PAID') {
+            throw new BadRequestError('Đơn hàng phải được thanh toán 100% trước khi mở lệnh giao hàng hoặc đánh dấu sẵn sàng');
+        }
+
         this.validateStatusTransition(order.status, 'READY');
 
-        return await ordersRepository.updateStatus(orderId, 'READY');
+        // Giao hàng tận nơi: Đẩy đơn qua hệ thống Giao Hàng Nhanh (GHN) tự động khi đóng kiện xong
+        let trackingNumber: string | null = null;
+        if (order.deliveryMethod === 'HOME_DELIVERY' && order.shippingWardCode && order.shippingDistrictId) {
+            try {
+                trackingNumber = await GhnService.createShippingOrder({
+                    orderId: order.id,
+                    toName: order.customer.fullName,
+                    toPhone: order.customer.phone || '0900000000',
+                    toAddress: order.shippingAddress || 'Địa chỉ ẩn',
+                    toWardCode: order.shippingWardCode,
+                    toDistrictId: order.shippingDistrictId,
+                    codAmount: 0, // Bắt 100% thanh toán trước nên COD qua bưu điện mặc định 0đ
+                    weight: 200, // Ước tính 200g
+                    items: order.orderItems.map(item => ({
+                        name: item.product.name.substring(0, 50),
+                        quantity: item.quantity,
+                        price: Number(item.unitPrice)
+                    }))
+                });
+            } catch (error: any) {
+                // Ném lỗi để chặn Update Status thành READY nếu đẩy đơn GHN thất bại
+                throw new BadRequestError(`Tạo đơn GHN thất bại: ${error.message}`);
+            }
+        }
+
+        const updated = await ordersRepository.updateStatus(orderId, 'READY');
+
+        if (trackingNumber) {
+            await ordersRepository.update(order.id, {
+                trackingNumber,
+                shippingStatus: 'READY_TO_SHIP',
+                shippingProvider: 'GHN'
+            });
+        }
+
+        // Notify customer order is ready for pickup or shipping
+        const message = order.deliveryMethod === 'HOME_DELIVERY'
+            ? `Đơn hàng #${orderId.slice(0, 8)} đã được đóng gói và chuẩn bị giao cho đơn vị vận chuyển!`
+            : `Đơn hàng #${orderId.slice(0, 8)} đã sẵn sàng, hãy đến cửa hàng nhận hàng!`;
+
+        notificationsService.sendToUser(order.customerId, {
+            type: 'ORDER_READY',
+            title: 'Đơn hàng đã sẵn sàng',
+            message,
+            data: { orderId },
+        });
+
+        return updated;
     }
 
     /**
@@ -437,6 +568,14 @@ class OrdersService {
                 console.error('Membership recordSpend error (non-critical):', membershipError);
             }
 
+            // 5. Notify customer order completed
+            notificationsService.sendToUser(order.customerId, {
+                type: 'ORDER_COMPLETED',
+                title: 'Đơn hàng hoàn tất',
+                message: `Đơn hàng #${orderId.slice(0, 8)} đã hoàn tất. Cảm ơn bạn đã mua hàng!`,
+                data: { orderId },
+            });
+
             return completedOrder;
         } catch (error: any) {
             console.error('Complete Order DB Error:', error);
@@ -486,7 +625,27 @@ class OrdersService {
         }
 
         // Update status
-        return await ordersRepository.updateStatus(orderId, 'CANCELLED');
+        const cancelled = await ordersRepository.updateStatus(orderId, 'CANCELLED');
+
+        // Notify customer
+        notificationsService.sendToUser(order.customerId, {
+            type: 'ORDER_CANCELLED',
+            title: 'Đơn hàng đã bị huỷ',
+            message: `Đơn hàng #${orderId.slice(0, 8)} đã bị huỷ`,
+            data: { orderId },
+        });
+
+        // Notify staff if order was already in processing
+        if (order.status === 'PROCESSING' || order.status === 'READY') {
+            notificationsService.broadcastToRole('STAFF', {
+                type: 'ORDER_CANCELLED',
+                title: 'Đơn hàng bị huỷ',
+                message: `Đơn hàng #${orderId.slice(0, 8)} đang xử lý đã bị huỷ`,
+                data: { orderId },
+            });
+        }
+
+        return cancelled;
 
         // TODO: Process refund via payment service
     }
@@ -731,6 +890,14 @@ class OrdersService {
                 console.error('Membership recordSpend error (non-critical):', membershipError);
             }
 
+            // Notify customer order completed
+            notificationsService.sendToUser(order.customerId, {
+                type: 'ORDER_COMPLETED',
+                title: 'Đơn hàng hoàn tất',
+                message: `Đơn hàng #${orderId.slice(0, 8)} đã hoàn tất. Cảm ơn bạn đã mua hàng!`,
+                data: { orderId },
+            });
+
             return completedOrder;
         } catch (error: any) {
             console.error('Complete Order DB Error:', error);
@@ -825,9 +992,9 @@ class OrdersService {
             return order;
         }
 
-        return await prisma.$transaction(async (tx) => {
+        const updatedOrder = await prisma.$transaction(async (tx) => {
             // 1. Update order
-            const updatedOrder = await tx.order.update({
+            const result = await tx.order.update({
                 where: { id: orderId },
                 data: {
                     paymentStatus: 'PAID',
@@ -847,8 +1014,18 @@ class OrdersService {
                 });
             }
 
-            return updatedOrder;
+            return result;
         });
+
+        // Notify customer of confirmed order (after transaction)
+        notificationsService.sendToUser(order!.customerId, {
+            type: 'ORDER_CONFIRMED',
+            title: 'Đơn hàng đã xác nhận',
+            message: `Đơn hàng #${orderId.slice(0, 8)} đã được xác nhận thành công`,
+            data: { orderId },
+        });
+
+        return updatedOrder;
     }
 
     /**

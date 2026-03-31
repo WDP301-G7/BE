@@ -4,6 +4,7 @@ import { membershipRepository, PaginatedHistory, GetHistoryFilter } from './memb
 import { NotFoundError, BadRequestError } from '../../utils/errorHandler';
 import { CreateTierInput, UpdateTierInput } from '../../validations/zod/membership.schema';
 import { settingsService } from '../settings/settings.service';
+import { notificationsService } from '../notifications/notifications.service';
 
 export interface MembershipStatus {
     tier: string | null;
@@ -187,6 +188,16 @@ class MembershipService {
                 newTierId,
                 reason,
             });
+
+            // Notify customer of tier upgrade
+            if (newTier) {
+                notificationsService.sendToUser(userId, {
+                    type: 'MEMBERSHIP_TIER_UPGRADED',
+                    title: 'Chúc mừng! Bạn đã lên hạng thành viên',
+                    message: `Bạn đã đạt hạng ${newTier.name}! Hưởng ${newTier.discountPercent}% giảm giá cho đơn hàng tiếp theo`,
+                    data: { tierId: newTier.id, tierName: newTier.name },
+                });
+            }
         }
     }
 
@@ -243,8 +254,16 @@ class MembershipService {
         await membershipRepository.createHistory({
             userId,
             oldTierId: user.membershipTierId,
-            newTierId: newTier?.id ?? user.membershipTierId ?? '', // Fallback to avoid null if possible or use a default
+            newTierId: newTier?.id ?? user.membershipTierId ?? '',
             reason: historyReason,
+        });
+
+        // Notify customer of point adjustment
+        notificationsService.sendToUser(userId, {
+            type: 'MEMBERSHIP_POINTS_ADJUSTED',
+            title: 'Cạnh điểm thành viên',
+            message: `Điểm tiêu dùng của bạn đã được điều chỉnh: ${data.amount >= 0 ? '+' : ''}${data.amount.toLocaleString('vi-VN')}đ`,
+            data: { amount: data.amount, reason: data.reason },
         });
 
         return this.getMembershipStatus(userId);

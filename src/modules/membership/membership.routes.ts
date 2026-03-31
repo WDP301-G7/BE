@@ -25,21 +25,36 @@ const router = Router();
 
 /**
  * @swagger
+ * /membership/tiers:
+ *   get:
+ *     summary: Get all membership tiers
+ *     tags: [Membership]
+ *     security: []
  *     responses:
  *       200:
  *         description: List of membership tiers
- *     security: []
  */
 router.get('/tiers', membershipController.getAllTiers.bind(membershipController));
 
 /**
  * @swagger
+ * /membership/tiers/{id}:
+ *   get:
+ *     summary: Get membership tier by ID
+ *     tags: [Membership]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
  *     responses:
  *       200:
  *         description: Membership tier details
  *       404:
  *         description: Tier not found
- *     security: []
  */
 router.get(
     '/tiers/:id',

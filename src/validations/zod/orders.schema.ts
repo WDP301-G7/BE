@@ -7,6 +7,11 @@ import { OrderStatus, OrderType } from '@prisma/client';
  */
 export const createOrderSchema = z.object({
     body: z.object({
+        deliveryMethod: z.enum(['PICKUP_AT_STORE', 'HOME_DELIVERY']).optional().default('PICKUP_AT_STORE'),
+        shippingAddress: z.string().max(255).optional(),
+        shippingProvinceId: z.number().int().optional(),
+        shippingDistrictId: z.number().int().optional(),
+        shippingWardCode: z.string().max(20).optional(),
         items: z
             .array(
                 z.object({
@@ -14,7 +19,20 @@ export const createOrderSchema = z.object({
                     quantity: z.number().int().min(1, 'Quantity must be at least 1'),
                 })
             )
-            .min(2, 'Order must have at least 2 items (1 FRAME + 1 LENS)'),
+            .min(1, 'Order must have at least 1 item'),
+    }).refine((data) => {
+        if (data.deliveryMethod === 'HOME_DELIVERY') {
+            return (
+                !!data.shippingAddress &&
+                !!data.shippingProvinceId &&
+                !!data.shippingDistrictId &&
+                !!data.shippingWardCode
+            );
+        }
+        return true;
+    }, {
+        message: 'Shipping information is required when HOME_DELIVERY is selected',
+        path: ['deliveryMethod']
     }),
 });
 

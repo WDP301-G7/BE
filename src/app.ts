@@ -11,14 +11,25 @@ import { apiResponse } from './utils/apiResponse';
 
 const app: Application = express();
 
+// Trust Railway / cloud reverse proxy (required for correct IP, HTTPS detection)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 
 // CORS configuration
+// CORS_ORIGIN supports: "*" or comma-separated "https://a.com,https://b.com"
+function parseCorsOrigin(raw: string) {
+  if (raw === '*') return '*';
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+  return parts.length === 1 ? parts[0] : parts;
+}
+const corsOrigin = parseCorsOrigin(ENV.CORS_ORIGIN);
+
 app.use(
   cors({
-    origin: ENV.CORS_ORIGIN,
-    credentials: true,
+    origin: corsOrigin,
+    credentials: corsOrigin !== '*',
   })
 );
 
@@ -69,6 +80,8 @@ import returnsRoutes from './modules/returns/returns.routes';
 import reviewsRoutes, { productReviewsRouter } from './modules/reviews/reviews.routes';
 import membershipRoutes from './modules/membership/membership.routes';
 import settingsRoutes from './modules/settings/settings.routes';
+import notificationsRoutes from './modules/notifications/notifications.routes';
+import { logisticsRoutes } from './modules/logistics/logistics.routes';
 
 app.use(`${ENV.API_PREFIX}/auth`, authRoutes);
 app.use(`${ENV.API_PREFIX}/users`, usersRoutes);
@@ -85,6 +98,8 @@ app.use(`${ENV.API_PREFIX}/reviews`, reviewsRoutes);
 app.use(`${ENV.API_PREFIX}/products/:productId/reviews`, productReviewsRouter);
 app.use(`${ENV.API_PREFIX}/membership`, membershipRoutes);
 app.use(`${ENV.API_PREFIX}/settings`, settingsRoutes);
+app.use(`${ENV.API_PREFIX}/notifications`, notificationsRoutes);
+app.use(`${ENV.API_PREFIX}/logistics`, logisticsRoutes);
 
 // 404 handler
 app.use((req, res) => {

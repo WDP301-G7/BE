@@ -14,6 +14,15 @@ export interface CreateOrderData {
         unitPrice: number;
     }>;
     expectedReadyDate?: Date;
+    deliveryMethod?: 'PICKUP_AT_STORE' | 'HOME_DELIVERY';
+    shippingAddress?: string;
+    shippingProvinceId?: number;
+    shippingDistrictId?: number;
+    shippingWardCode?: string;
+    shippingFee?: number;
+    shippingStatus?: 'READY_TO_SHIP' | 'PICKING' | 'DELIVERING' | 'DELIVERED' | 'RETURNED' | 'CANCELLED';
+    trackingNumber?: string;
+    shippingProvider?: string;
 }
 
 export interface GetOrdersFilter {
@@ -80,6 +89,15 @@ class OrdersRepository {
                     discountAmount: data.discountAmount ?? 0,
                     membershipTierId: data.membershipTierId ?? null,
                     expectedReadyDate: data.expectedReadyDate ?? null,
+                    deliveryMethod: data.deliveryMethod || 'PICKUP_AT_STORE',
+                    shippingAddress: data.shippingAddress,
+                    shippingProvinceId: data.shippingProvinceId,
+                    shippingDistrictId: data.shippingDistrictId,
+                    shippingWardCode: data.shippingWardCode,
+                    shippingFee: data.shippingFee ?? 0,
+                    shippingStatus: data.shippingStatus,
+                    trackingNumber: data.trackingNumber,
+                    shippingProvider: data.shippingProvider,
                 },
             });
 
