@@ -44,7 +44,7 @@ class OrdersService {
         // Step 1: Get products and calculate total (Batch fetch to fix N+1)
         const productIds = data.items.map(item => item.productId);
         const products = await productsRepository.findManyByIds(productIds);
-        
+
         if (products.length !== new Set(productIds).size) {
             const missingId = productIds.find(id => !products.find(p => p.id === id));
             throw new NotFoundError(`Product with ID ${missingId} not found`);
@@ -95,7 +95,7 @@ class OrdersService {
         // Step 5b: Apply membership discount
         const membershipTier = await membershipService.getUserTier(customerId);
         let discountPercent = 0;
-        
+
         if (membershipTier) {
             discountPercent = Number(membershipTier.discountPercent);
         } else {
@@ -112,7 +112,7 @@ class OrdersService {
             shippingFee = await GhnService.calculateShippingFee(
                 data.shippingDistrictId,
                 data.shippingWardCode,
-                200 
+                200
             );
             totalAmount += shippingFee;
         }
@@ -489,7 +489,7 @@ class OrdersService {
         const productIds = order.orderItems
             .filter(item => item.product.type !== 'SERVICE')
             .map(item => item.productId);
-        
+
         const allInventories = await inventoryRepository.findManyByProducts(productIds);
         const inventoryMap = new Map<string, InventoryWithRelations[]>();
         for (const inv of allInventories) {
@@ -657,7 +657,7 @@ class OrdersService {
         const productIds = order.orderItems
             .filter(item => item.product.type !== 'SERVICE')
             .map(item => item.productId);
-        
+
         const allInventories = await inventoryRepository.findManyByProducts(productIds);
         const inventoryMap = new Map<string, InventoryWithRelations[]>();
         for (const inv of allInventories) {
@@ -808,7 +808,7 @@ class OrdersService {
         const productIds = order.orderItems
             .filter(item => item.product.type !== 'SERVICE')
             .map(item => item.productId);
-        
+
         const allInventories = await inventoryRepository.findManyByProducts(productIds);
         const inventoryMap = new Map<string, InventoryWithRelations[]>();
         for (const inv of allInventories) {
@@ -998,8 +998,8 @@ class OrdersService {
                 where: { id: orderId },
                 data: {
                     paymentStatus: 'PAID',
-                    status: (order.status === 'WAITING_CUSTOMER' || order.status === 'NEW') 
-                        ? 'CONFIRMED' 
+                    status: (order.status === 'WAITING_CUSTOMER' || order.status === 'NEW')
+                        ? 'CONFIRMED'
                         : order.status,
                 },
             });
@@ -1075,6 +1075,51 @@ class OrdersService {
         }
 
         return { expiredCount: expiredOrders.length };
+    }
+
+    /**
+     * CUSTOMER FEATURE: Confirm Receipt
+     * Allow customer to manually confirm they received the order.
+     * This mimics the GHN Webhook 'delivered' event.
+     */
+    async confirmReceipt(orderId: string, customerId: string): Promise<Order> {
+        const order = await ordersRepository.findById(orderId);
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        // Authorization: Check if correct customer
+        if (order.customerId !== customerId) {
+            throw new ForbiddenError('You can only confirm receipt for your own orders');
+        }
+
+        // Chỉ cho phép đối với đơn Giao tận nơi (Shipping orders only)
+        if (order.deliveryMethod !== 'HOME_DELIVERY') {
+            throw new BadRequestError('Chỉ đơn hàng giao tận nơi mới có thể chủ động xác nhận nhận hàng.');
+        }
+
+        // Business Rule: Only allow if shipped (READY)
+        if (order.status !== 'READY') {
+            throw new BadRequestError('Order must be in READY status (shipped) to confirm receipt');
+        }
+
+        // Complete the order (Logic: Inventory deduction, Membership spin, Notification)
+        const completedOrder = await this.completeOrder(orderId);
+
+        // Update Shipping Status to DELIVERED
+        await ordersRepository.update(orderId, {
+            shippingStatus: 'DELIVERED',
+        });
+
+        // Notify staff that order was completed by customer
+        notificationsService.broadcastToRole('STAFF', {
+            type: 'ORDER_COMPLETED',
+            title: 'Khách đã nhận hàng',
+            message: `Khách hàng đã xác nhận nhận hàng cho đơn #${orderId.slice(0, 8)}`,
+            data: { orderId },
+        });
+
+        return completedOrder;
     }
 }
 
