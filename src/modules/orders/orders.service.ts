@@ -22,6 +22,7 @@ import { GhnService } from '../../integrations/ghn/ghn.service';
  */
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     NEW: ['CONFIRMED', 'CANCELLED'],
+    PENDING_PAYMENT: ['CONFIRMED', 'CANCELLED', 'EXPIRED'],
     CONFIRMED: ['WAITING_CUSTOMER', 'CANCELLED'],
     WAITING_CUSTOMER: ['PROCESSING', 'CANCELLED'],
     WAITING_PRODUCT: ['PROCESSING', 'CANCELLED'],
@@ -602,12 +603,12 @@ class OrdersService {
             throw new ForbiddenError('You can only cancel your own orders');
         }
 
-        // Customer can only cancel NEW, CONFIRMED, WAITING_CUSTOMER
+        // Customer can only cancel NEW, PENDING_PAYMENT, CONFIRMED, WAITING_CUSTOMER
         if (userRole === 'CUSTOMER') {
-            const allowedStatuses: OrderStatus[] = ['NEW', 'CONFIRMED', 'WAITING_CUSTOMER'];
+            const allowedStatuses: OrderStatus[] = ['NEW', 'PENDING_PAYMENT', 'CONFIRMED', 'WAITING_CUSTOMER'];
             if (!allowedStatuses.includes(order.status)) {
                 throw new BadRequestError(
-                    'You can only cancel orders in NEW, CONFIRMED, or WAITING_CUSTOMER status. Please contact support.'
+                    'You can only cancel orders in NEW, PENDING_PAYMENT, CONFIRMED, or WAITING_CUSTOMER status. Please contact support.'
                 );
             }
         }
@@ -998,7 +999,7 @@ class OrdersService {
                 where: { id: orderId },
                 data: {
                     paymentStatus: 'PAID',
-                    status: (order.status === 'WAITING_CUSTOMER' || order.status === 'NEW')
+                    status: (order.status === 'PENDING_PAYMENT' || order.status === 'NEW')
                         ? 'CONFIRMED'
                         : order.status,
                 },
@@ -1031,7 +1032,7 @@ class OrdersService {
     /**
      * Expire unpaid orders
      * - Find orders past expiresAt
-     * - Update order status: WAITING_CUSTOMER → EXPIRED
+     * - Update order status: PENDING_PAYMENT → EXPIRED
      * - Update prescription request status: QUOTED → EXPIRED
      */
     async expireUnpaidOrders(): Promise<{ expiredCount: number }> {
@@ -1040,7 +1041,7 @@ class OrdersService {
         // Find expired orders
         const expiredOrders = await prisma.order.findMany({
             where: {
-                status: 'WAITING_CUSTOMER',
+                status: 'PENDING_PAYMENT',
                 paymentStatus: 'UNPAID',
                 expiresAt: {
                     lt: now,

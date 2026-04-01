@@ -61,7 +61,7 @@ router.get(
  *         required: false
  *         schema:
  *           type: string
- *           enum: [WAITING_CUSTOMER, PROCESSING, READY, COMPLETED, CANCELLED]
+ *           enum: [PENDING_PAYMENT, WAITING_CUSTOMER, PROCESSING, READY, COMPLETED, CANCELLED]
  *         description: Filter by order status. If omitted, returns WAITING_CUSTOMER, PROCESSING, READY.
  *     responses:
  *       200:
@@ -605,7 +605,7 @@ router.get(
  *             properties:
  *               status:
  *                 type: string
- *                 enum: [NEW, CONFIRMED, WAITING_CUSTOMER, WAITING_PRODUCT, PROCESSING, READY, COMPLETED, CANCELLED]
+ *                 enum: [NEW, PENDING_PAYMENT, CONFIRMED, WAITING_CUSTOMER, WAITING_PRODUCT, PROCESSING, READY, COMPLETED, CANCELLED]
  *     responses:
  *       200:
  *         description: Status updated successfully

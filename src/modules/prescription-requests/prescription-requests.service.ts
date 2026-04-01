@@ -273,7 +273,7 @@ class PrescriptionRequestsService {
                 data: {
                     customerId: request.customerId,
                     orderType: OrderType.PRESCRIPTION,
-                    status: OrderStatus.WAITING_CUSTOMER,
+                    status: OrderStatus.PENDING_PAYMENT,
                     paymentStatus: PaymentStatus.UNPAID,
                     totalAmount,
                     expectedReadyDate: data.expectedReadyDate ? new Date(data.expectedReadyDate) : undefined,
