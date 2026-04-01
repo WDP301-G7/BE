@@ -70,6 +70,8 @@ export type ReviewWithRelations = Prisma.ReviewGetPayload<{
             select: {
                 id: true;
                 fullName: true;
+                phone: true;
+                email: true;
                 avatarUrl: true;
             };
         };
@@ -532,6 +534,8 @@ class ReviewsRepository {
             select: {
                 id: true,
                 fullName: true,
+                phone: true,
+                email: true,
                 avatarUrl: true,
             },
         },

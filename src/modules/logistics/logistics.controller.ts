@@ -2,6 +2,16 @@ import { Request, Response } from 'express';
 import { ordersRepository } from '../orders/orders.repository';
 import { notificationsService } from '../notifications/notifications.service';
 import { ShippingStatus } from '@prisma/client';
+import { apiResponse } from '../../utils/apiResponse';
+import { BadRequestError, NotFoundError } from '../../utils/errorHandler';
+
+type GhnStatus = 'picking' | 'delivering' | 'delivered' | 'cancel' | 'return' | 'returned';
+
+const NEXT_STEP: Record<string, GhnStatus> = {
+    READY_TO_SHIP: 'picking',
+    PICKING:       'delivering',
+    DELIVERING:    'delivered',
+};
 
 export class LogisticsController {
     /**
@@ -27,79 +37,161 @@ export class LogisticsController {
                 return;
             }
 
-            const status = data.Status;
-            let orderId = data.ClientOrderCode;
-
-            // Tìm order bằng ClientOrderCode (orderId) trước
-            let order: any = null;
-            if (orderId) {
-                order = await ordersRepository.findById(orderId);
-            }
-
-            // Fallback: Tìm bằng OrderCode (Tracking Number) nếu không có hoặc không khớp ClientOrderCode
-            if (!order && data.OrderCode) {
-                const orderFromPrisma = await import('../../config/database').then(m =>
-                    m.prisma.order.findFirst({ where: { trackingNumber: data.OrderCode } })
-                );
-                if (orderFromPrisma) {
-                    order = await ordersRepository.findById(orderFromPrisma.id);
-                    orderId = order?.id;
-                }
-            }
-
-            if (!order) {
-                res.status(404).json({ code: 404, message: 'Order not found' });
-                return;
-            }
-
-            let newShippingStatus: ShippingStatus | null = null;
-            let shouldUpdateOrderToCompleted = false;
-            let notificationMessage = '';
-
-            // Map GHN Status to our internal ShippingStatus
-            switch (status) {
-                case 'picking':
-                    newShippingStatus = 'PICKING';
-                    break;
-                case 'delivering':
-                    newShippingStatus = 'DELIVERING';
-                    notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} của bạn đang được giao đến bạn. Vui lòng chú ý điện thoại.`;
-                    break;
-                case 'delivered':
-                    newShippingStatus = 'DELIVERED';
-                    shouldUpdateOrderToCompleted = true; // Auto complete order when successfully delivered
-                    notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} đã được giao thành công. Cảm ơn bạn đã mua sắm!`;
-                    break;
-                case 'cancel':
-                case 'return':
-                case 'returned':
-                    newShippingStatus = 'RETURNED';
-                    notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} giao không thành công và đang được hoàn trả.`;
-                    break;
-            }
-
-            // Update in DB
-            if (newShippingStatus && newShippingStatus !== order.shippingStatus) {
-                await ordersRepository.update(orderId, {
-                    shippingStatus: newShippingStatus,
-                    ...(shouldUpdateOrderToCompleted ? { status: 'COMPLETED' } : {})
-                });
-
-                // Send Notification
-                if (notificationMessage) {
-                    await notificationsService.sendToUser(order.customerId, {
-                        type: newShippingStatus === 'DELIVERED' ? 'ORDER_DELIVERED' : 'ORDER_DELIVERING',
-                        title: 'Cập nhật giao hàng',
-                        message: notificationMessage,
-                        data: { orderId, trackingNumber: data.OrderCode },
-                    });
-                }
-            }
-
+            await this._processWebhookPayload(data);
             res.status(200).json({ code: 200, message: 'OK' });
         } catch (error) {
             console.error('GHN Webhook Error:', error);
             res.status(500).json({ code: 500, message: 'Internal Server Error' });
+        }
+    }
+
+    /**
+     * [DEMO] Giả lập trạng thái giao hàng GHN — dùng trong demo/dev
+     *
+     * Cho phép STAFF/OPERATION/ADMIN tiến từng bước shipping mà không cần
+     * shipper thật quét mã. Tái sử dụng toàn bộ logic của webhook GHN.
+     *
+     * Gọi lần 1 → PICKING
+     * Gọi lần 2 → DELIVERING  (notification gửi KH)
+     * Gọi lần 3 → DELIVERED   → order tự động COMPLETED (notification gửi KH)
+     *
+     * Hoặc truyền `step` cụ thể trong body để nhảy thẳng.
+     */
+    async simulateDelivery(req: Request, res: Response): Promise<void> {
+        try {
+            const orderId = req.params.orderId as string;
+            const { step } = req.body as { step?: GhnStatus };
+
+            const order = await ordersRepository.findById(orderId);
+            if (!order) throw new NotFoundError('Order not found');
+
+            if (order.status !== 'READY') {
+                throw new BadRequestError(
+                    `Chỉ giả lập được khi order ở trạng thái READY (hiện tại: ${order.status})`
+                );
+            }
+            if (order.deliveryMethod !== 'HOME_DELIVERY') {
+                throw new BadRequestError('Chỉ áp dụng cho đơn HOME_DELIVERY');
+            }
+
+            // Xác định bước tiếp theo
+            const validSteps: GhnStatus[] = ['picking', 'delivering', 'delivered'];
+            let targetStep: GhnStatus;
+
+            if (step && validSteps.includes(step)) {
+                targetStep = step;
+            } else {
+                const currentShipping = order.shippingStatus ?? 'READY_TO_SHIP';
+                const next = NEXT_STEP[currentShipping];
+                if (!next) {
+                    throw new BadRequestError(
+                        `Đơn đã hoàn tất shipping (shippingStatus: ${currentShipping})`
+                    );
+                }
+                targetStep = next;
+            }
+
+            await this._processWebhookPayload({
+                Status:          targetStep,
+                ClientOrderCode: orderId,
+                OrderCode:       order.trackingNumber ?? `DEMO_${orderId.slice(0, 8)}`,
+            });
+
+            const stepLabel: Record<GhnStatus, string> = {
+                picking:   'Đang lấy hàng (PICKING)',
+                delivering:'Đang giao hàng (DELIVERING)',
+                delivered: 'Giao thành công → Order COMPLETED',
+                cancel:    'Huỷ',
+                return:    'Hoàn trả',
+                returned:  'Đã hoàn trả',
+            };
+
+            res.status(200).json(
+                apiResponse.success(
+                    { orderId, step: targetStep },
+                    `[DEMO] ${stepLabel[targetStep]}`
+                )
+            );
+        } catch (error) {
+            const err = error as any;
+            if (err.statusCode) {
+                res.status(err.statusCode).json(apiResponse.error(err.message));
+            } else {
+                console.error('Simulate Delivery Error:', error);
+                res.status(500).json(apiResponse.error('Lỗi giả lập giao hàng'));
+            }
+        }
+    }
+
+    /**
+     * Xử lý payload GHN webhook — dùng chung cho webhook thật và simulate
+     */
+    private async _processWebhookPayload(data: {
+        Status: string;
+        ClientOrderCode?: string;
+        OrderCode?: string;
+    }): Promise<void> {
+        const status = data.Status;
+        let orderId = data.ClientOrderCode;
+
+        // Tìm order bằng ClientOrderCode trước
+        let order: any = null;
+        if (orderId) {
+            order = await ordersRepository.findById(orderId);
+        }
+
+        // Fallback: tìm bằng tracking number
+        if (!order && data.OrderCode) {
+            const orderFromPrisma = await import('../../config/database').then(m =>
+                m.prisma.order.findFirst({ where: { trackingNumber: data.OrderCode } })
+            );
+            if (orderFromPrisma) {
+                order = await ordersRepository.findById(orderFromPrisma.id);
+                orderId = order?.id;
+            }
+        }
+
+        if (!order || !orderId) return;
+
+        let newShippingStatus: ShippingStatus | null = null;
+        let shouldUpdateOrderToCompleted = false;
+        let notificationMessage = '';
+
+        switch (status) {
+            case 'picking':
+                newShippingStatus = 'PICKING';
+                break;
+            case 'delivering':
+                newShippingStatus = 'DELIVERING';
+                notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} của bạn đang được giao đến bạn. Vui lòng chú ý điện thoại.`;
+                break;
+            case 'delivered':
+                newShippingStatus = 'DELIVERED';
+                shouldUpdateOrderToCompleted = true;
+                notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} đã được giao thành công. Cảm ơn bạn đã mua sắm!`;
+                break;
+            case 'cancel':
+            case 'return':
+            case 'returned':
+                newShippingStatus = 'RETURNED';
+                notificationMessage = `Đơn hàng #${orderId.slice(0, 8)} giao không thành công và đang được hoàn trả.`;
+                break;
+        }
+
+        if (newShippingStatus && newShippingStatus !== order.shippingStatus) {
+            await ordersRepository.update(orderId, {
+                shippingStatus: newShippingStatus,
+                ...(shouldUpdateOrderToCompleted ? { status: 'COMPLETED' } : {}),
+            });
+
+            if (notificationMessage) {
+                await notificationsService.sendToUser(order.customerId, {
+                    type: newShippingStatus === 'DELIVERED' ? 'ORDER_DELIVERED' : 'ORDER_DELIVERING',
+                    title: 'Cập nhật giao hàng',
+                    message: notificationMessage,
+                    data: { orderId, trackingNumber: data.OrderCode },
+                });
+            }
         }
     }
 }
