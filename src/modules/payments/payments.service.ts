@@ -30,9 +30,9 @@ class PaymentsService {
         }
 
         // 2. Validate order status
-        // Allow NEW (regular orders) or WAITING_CUSTOMER (prescription orders)
-        if (order.status !== 'NEW' && order.status !== 'WAITING_CUSTOMER') {
-            throw new BadRequestError('Order must be in NEW or WAITING_CUSTOMER status to create payment');
+        // Allow NEW (regular orders) or PENDING_PAYMENT (prescription quote orders)
+        if (order.status !== 'NEW' && order.status !== 'PENDING_PAYMENT') {
+            throw new BadRequestError('Order must be in NEW or PENDING_PAYMENT status to create payment');
         }
 
         // 3. Check if payment already exists
