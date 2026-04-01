@@ -171,25 +171,44 @@ class UsersService {
 
   /**
    * Delete user
+   * If user has existing data (orders, reviews, etc.), ban instead of hard delete
+   * to preserve referential integrity.
    */
   async deleteUser(id: string, deleterId: string, deleterRole: Role): Promise<void> {
-    // Get user
     const user = await usersRepository.findById(id);
     if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    // Users cannot delete themselves
     if (id === deleterId) {
       throw new ForbiddenError('You cannot delete your own account');
     }
 
-    // Check if deleter can manage target user's role
     if (!canManageRole(deleterRole, user.role as Role)) {
       throw new ForbiddenError(`You cannot delete users with role: ${user.role}`);
     }
 
-    await usersRepository.delete(id);
+    // Try hard delete first; if FK constraint fires, fall back to BANNED
+    try {
+      await usersRepository.delete(id);
+    } catch (error: any) {
+      const isFkViolation =
+        error?.code === 'P2003' ||
+        (typeof error?.message === 'string' && error.message.toLowerCase().includes('foreign key'));
+
+      if (isFkViolation) {
+        // User has related data — ban instead of delete
+        await usersRepository.update(id, { status: 'BANNED' } as any);
+        notificationsService.sendToUser(id, {
+          type: 'ACCOUNT_BANNED',
+          title: 'Tài khoản bị khóa',
+          message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ để biết thêm.',
+          data: {},
+        });
+      } else {
+        throw error;
+      }
+    }
   }
 
   /**
