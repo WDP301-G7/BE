@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { UnauthorizedError } from '../utils/errorHandler';
 import { tokenService } from '../utils/token';
+import { prisma } from '../config/database';
 
 // Extend Express Request type to include user
 declare global {
@@ -17,10 +18,9 @@ declare global {
 }
 
 /**
- * Authentication middleware - Verifies JWT token
- * Business logic will be implemented in Phase 1+
+ * Authentication middleware - Verifies JWT token and checks user status
  */
-export const authMiddleware = (req: Request, _res: Response, next: NextFunction): void => {
+export const authMiddleware = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
@@ -32,6 +32,24 @@ export const authMiddleware = (req: Request, _res: Response, next: NextFunction)
 
     // Verify token
     const decoded = tokenService.verifyAccessToken(token);
+
+    // Check user status in DB — reject if BANNED or INACTIVE
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { status: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    if (user.status === 'BANNED') {
+      throw new UnauthorizedError('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.');
+    }
+
+    if (user.status === 'INACTIVE') {
+      throw new UnauthorizedError('Tài khoản chưa được kích hoạt.');
+    }
 
     // Attach user to request
     req.user = {
